@@ -1,125 +1,174 @@
-# IMU + FAST-LIO ESKF groundwork (phase 1)
+# 基于 IMU + FAST-LIO 的 ESKF 姿态解算
 
-This directory currently implements only the data and rotation foundation for
-the later 6D attitude ESKF:
+## 1. 项目目标
 
-- raw IMU and FAST-LIO CSV validation;
-- accelerometer conversion from `g` to `m/s^2`;
-- initial static-candidate statistics;
-- monotonic one-to-one timestamp alignment;
-- `xyzw` quaternion and rotation helpers;
-- synthetic and real-data tests.
-- validated processed-data loaders for later runtime code;
-- a repeatable gravity sanity check for pose quaternion direction.
+本项目使用 IMU 角速度进行姿态递推，并使用 FAST-LIO 姿态作为观测，逐步实现一个仅包含姿态与陀螺仪零偏的 6D Error-State Kalman Filter（误差状态卡尔曼滤波器，ESKF）。当前阶段强调数据语义、坐标约定和时间边界可审计，不扩展位置、速度或加速度计零偏状态。
 
-It intentionally contains no ESKF prediction, update, injection, reset, or 15D
-position-state implementation.
+## 2. 当前实现进度
 
-## Conventions
+已经完成：
 
-- Quaternion storage: `[qx, qy, qz, qw]` (`xyzw`).
-- Rotation matrix: `v_W = R_WB @ v_B`.
-- Future error convention: right multiplicative,
-  `R_true = R_hat Exp(delta_theta^)`.
-- World gravity: `[0, 0, -9.81] m/s^2`.
-- `dt[0]` is `NaN`; it is not a fabricated sampling interval.
-- Alignment error is `pose_timestamp[j] - imu_timestamp[k]`.
+- 原始 IMU 与 FAST-LIO CSV 校验和预处理；
+- 加速度从 `g` 转换为 `m/s^2`；
+- 初始静止区间统计；
+- 单调、一对一的时间戳匹配；
+- `xyzw` 四元数与旋转工具；
+- processed `.npz` 的强校验加载器；
+- FAST-LIO 四元数方向的源码与真实数据验证；
+- 6D ESKF Initialization（初始化）：`q0`、`bg0`、`P0`、`Qc`。
 
-## Run
+尚未实现：Prediction、名义四元数递推、`Fc/Gc/Phi/Qd`、协方差传播、Observation Update、Kalman Gain、Injection、Reset、主滤波循环、RPY 结果绘图和任何 15D/位置/速度状态。
 
-Use a Python environment with NumPy installed:
+## 3. 数据说明
+
+正式运行代码通过 [processed_io.py](processed_io.py) 读取：
+
+- `data/processed/imu_processed.npz`
+- `data/processed/pose_processed.npz`
+- `data/processed/init_stats.npz`
+- `data/processed/match_table.npz`
+
+IMU 角速度单位为 `rad/s`，加速度单位为 `m/s^2`。预处理数据保持原始测量含义，不预先扣除 `bg0`，也不执行重力补偿。`dt[0]` 为 `NaN`，因为第一个样本没有前驱；它不是人为补造的采样间隔。
+
+默认无效行策略只丢弃无法解析为完整有限数值记录的行，并在诊断中记录原始 CSV 行号。若需要遇错即停，可在 `ProjectConfig` 中设置 `invalid_sample_policy="raise"`。时间戳重复或逆序、无效四元数和负协方差始终报错。
+
+## 4. 数学与坐标约定
+
+- 四元数存储顺序：`[qx, qy, qz, qw]`，即 `xyzw`。
+- 姿态方向：`R_WB` 将 Body Frame 向量转换到 World Frame，`v_W = R_WB @ v_B`。
+- 误差约定：右乘误差，`R_true = R_hat Exp(delta_theta^)`。
+- 世界系重力：`g_W = [0, 0, -9.81] m/s^2`。
+- 匹配误差：`pose_timestamp[j] - imu_timestamp[k]`。
+
+当前 Nominal State（名义状态）为 `q_hat` 与 `b_g_hat`。Error State（误差状态）为：
+
+```text
+delta_x = [delta_theta, delta_b_g]
+```
+
+维度为 6。工程中不长期保存 `delta_x = zeros(6)`；后续 injection/reset 后将误差均值按零处理。
+
+## 5. 第一阶段：数据预处理与时间对齐
+
+预处理入口：
 
 ```powershell
 python scripts/run_preprocess.py
-python -m unittest discover -s tests -v
 ```
 
-The preprocessing command writes four requested `.npz` files and both JSON and
-plain-text diagnostics under `data/processed/`.
+该命令生成四个 processed `.npz`，以及 JSON 和文本诊断。时间匹配采用由数据采样周期确定的容差，保持 pose 不重复使用，并用 `-1` 标记没有有效 pose 的 IMU 样本。
 
-The phase-1 convention check uses only processed data and does not run a filter:
+## 6. FAST-LIO 姿态方向验证
+
+本项目正式把 FAST-LIO CSV 四元数解释为 `q_WB`，但区分以下两类证据：
+
+1. 标准 FAST-LIO 源码支持 `R_WB`：[`pointBodyToWorld`](https://github.com/hku-mars/FAST_LIO/blob/main/src/laserMapping.cpp#L165-L169) 使用 `state_point.rot` 将 IMU/body 点变换到全局；过程模型通过 [`s.rot * (in.acc - s.ba)`](https://github.com/hku-mars/FAST_LIO/blob/main/include/use-ikfom.hpp#L42-L53) 得到惯性系加速度；源码把 [`state_point.rot` 直接复制到 `geoQuat`](https://github.com/hku-mars/FAST_LIO/blob/main/src/laserMapping.cpp#L887-L897)，并发布 `camera_init -> body` 的 [odometry/TF](https://github.com/hku-mars/FAST_LIO/blob/main/src/laserMapping.cpp#L545-L574)。
+2. 当前仓库没有生成所给 CSV 的导出代码，因此仅凭标准源码无法证明导出程序没有额外求逆或坐标变换。
+
+真实静止数据在排除 20 个非正姿态协方差帧后，共使用 347 组匹配：
+
+| 四元数假设 | 平均角误差 | 中位角误差 | 最大角误差 | 平均向量残差 |
+| --- | ---: | ---: | ---: | ---: |
+| `q = R_WB` | 0.736329 deg | 0.656430 deg | 1.699284 deg | 0.146254 m/s^2 |
+| `q = R_BW` | 1.335364 deg | 1.293349 deg | 2.516289 deg | 0.240803 m/s^2 |
+
+`R_WB` 在 86.17% 的样本上角误差更小；代表性平均姿态的误差分别为 0.400813 deg 与 1.231878 deg。源码/frame 语义和重力检查共同给出 **Strongly supports `R_WB`**。重力只能约束 roll/pitch 方向，不能独立验证 yaw 语义。
+
+复验命令：
 
 ```powershell
 python scripts/check_pose_convention.py
 ```
 
-`tests/` and `scripts/check_pose_convention.py` are development-time validation
-assets. They are deliberately isolated from runtime algorithm modules and can
-be reviewed separately during the final submission cleanup.
+## 7. Observation Covariance 使用说明
 
-## Invalid-row policy
+前 20 个 pose 帧的协方差对角线全零，时间范围为 `1786181234.225484610` 至 `1786181234.319545984`；静止初始化区间结束时间为 `1786181236.055275679`，因此当前数据从初始化点向后不会使用这些观测。
 
-The default policy drops a row only when it cannot be parsed as a complete,
-finite numeric record. Every dropped source CSV row is listed in the diagnostic
-report. Set `invalid_sample_policy="raise"` in a supplied `ProjectConfig` when a
-strict fail-fast pipeline is required. Timestamp duplicates or reversals,
-invalid quaternions, and negative covariance diagonals always raise errors.
+当前策略是：任一姿态方差 `<= 0` 时拒绝初始化或跳过后续观测。零方差会把观测解释为完全确定，可能造成奇异或过强更新；在没有数据依据时添加 covariance floor 会引入隐藏调参，因此当前不设置 `R_min`。
 
-## FAST-LIO quaternion direction evidence
+题面给出的 `cov_33/cov_44/cov_55` 是 roll/pitch/yaw 方差，而右乘 ESKF 使用局部旋转向量 `delta_theta`。两者严格来说不是同一坐标表达，映射依赖当前姿态、欧拉角顺序、误差乘法侧和坐标系。当前作业采用小误差工程近似：
 
-The project continues to interpret the CSV quaternion as active `R_WB`, but the
-evidence has two distinct scopes:
+```text
+P_theta ≈ diag(cov_33, cov_44, cov_55)
+```
 
-1. Standard FAST-LIO source supports `R_WB`. In
-   [`pointBodyToWorld`](https://github.com/hku-mars/FAST_LIO/blob/main/src/laserMapping.cpp#L165-L169),
-   `state_point.rot` multiplies an IMU/body-frame point before adding the global
-   position. The process model similarly computes inertial acceleration as
-   [`s.rot * (in.acc - s.ba)`](https://github.com/hku-mars/FAST_LIO/blob/main/include/use-ikfom.hpp#L42-L53).
-   FAST-LIO copies [`state_point.rot` into `geoQuat`](https://github.com/hku-mars/FAST_LIO/blob/main/src/laserMapping.cpp#L887-L897),
-   then publishes odometry with parent frame `camera_init` and child frame
-   [`body`](https://github.com/hku-mars/FAST_LIO/blob/main/src/laserMapping.cpp#L545-L574).
-2. The supplied CSV export code is not in this repository. Source evidence for
-   standard FAST-LIO therefore cannot prove that the CSV exporter applied no
-   additional inverse or frame transform.
+当前不额外引入题目未要求的 Euler-to-tangent covariance Jacobian。
 
-The independent gravity check uses 347 matched static samples after excluding
-the 20 poses with non-positive attitude covariance:
+## 8. FAST-LIO 与 IMU 相关性假设
 
-| Quaternion hypothesis | Mean angle | Median angle | Maximum angle | Mean residual |
-| --- | ---: | ---: | ---: | ---: |
-| `q = R_WB` | 0.736329 deg | 0.656430 deg | 1.699284 deg | 0.146254 m/s^2 |
-| `q = R_BW` | 1.335364 deg | 1.293349 deg | 2.516289 deg | 0.240803 m/s^2 |
+[FAST-LIO 是紧耦合 LiDAR-inertial estimator](https://github.com/hku-mars/FAST_LIO#fast-lio)，其姿态输出与本项目预测所使用的同一 IMU 数据并非严格统计独立。忽略交叉相关性可能重复利用信息、低估不确定性，并使名义 Kalman filter 不一致。
 
-`R_WB` has the smaller per-sample angular error for 86.17% of the samples. The
-representative mean-orientation errors are 0.400813 deg (`R_WB`) and 1.231878
-deg (`R_BW`). Together with the source/frame evidence, the result **strongly
-supports `R_WB`**. Gravity constrains roll and pitch but cannot independently
-verify yaw semantics.
+题目没有要求相关噪声或交叉协方差建模，因此本项目采用“过程噪声与观测噪声独立”的课程简化假设。这是明确的工程近似，不是严格独立性的声明。
 
-## Observation covariance assumptions
+## 9. 第二阶段：6D ESKF Initialization
 
-The first 20 pose frames have an all-zero covariance diagonal. Their timestamp
-range is `1786181234.225484610` to `1786181234.319545984`; the selected static
-interval ends at `1786181236.055275679`. A filter starting at the static end
-therefore does not use these 20 observations in the current recording.
+[initialization.py](initialization.py) 只负责建立 `q0`、`bg0`、`P0` 和连续时间 Process Noise（过程噪声）`Qc`，不包含 Prediction 或 Update。
 
-For the first ESKF version, an observation with any attitude variance `<= 0`
-should be skipped. Zero variance would claim perfect certainty and can make an
-update singular or overwhelmingly strong. Replacing it with an unspecified
-floor would introduce a hidden tuning parameter and reinterpret uninitialized
-metadata as a valid observation. A covariance floor is only appropriate later
-if the source documents the meaning of zero and a defensible minimum variance
-is calibrated; no `R_min` is chosen in this phase.
+### 9.1 初始化时刻
 
-The exam labels `cov_33`, `cov_44`, and `cov_55` as roll, pitch, and yaw
-variances. Euler-angle perturbations are not strictly the same coordinates as a
-right-multiplicative local rotation vector: the mapping depends on the nominal
-attitude, Euler convention, perturbation side/frame, and omitted cross terms.
-The assignment nevertheless clearly expects these three values to be used.
-For small attitude errors, this project will use their diagonal as an
-observation-noise approximation, document that approximation, and avoid adding
-an unrequested Euler-to-tangent covariance Jacobian.
+静止区间为 `[static_start_idx, static_end_idx)`。当前数据为 `[0, 396)`，因此：
 
-## FAST-LIO and IMU correlation assumption
+```text
+static_end_idx = 396
+k0 = static_end_idx - 1 = 395
+t0 = imu.timestamp[k0]
+j0 = alignment.pose_index_for_imu[k0]
+```
 
-[FAST-LIO is a tightly coupled LiDAR-inertial estimator](https://github.com/hku-mars/FAST_LIO#fast-lio)
-and uses IMU acceleration and angular velocity in its process model. Its
-attitude output is therefore not statistically independent of the same IMU
-gyro used by this assignment's prediction. Ignoring the cross-correlation can
-double-count information, underestimate uncertainty, and make a nominal Kalman
-filter inconsistent.
+`j0` 必须有效；若为 `-1`，直接报错，不前后搜索、不插值，也不改变 `k0`。`q0`、`bg0` 和 `P0` 都表示 `t0` 时刻的初始化状态。未来 Prediction 的第一步应为 `395 -> 396`，使用 `imu.dt[396]`，但当前阶段没有实现该步骤。
 
-The exam does not request correlated-noise or cross-covariance modelling. This
-assignment will therefore use the standard simplifying assumption that process
-and observation noise are independent. This is an explicit coursework
-approximation, not a claim of strict statistical independence.
+### 9.2 名义状态初值
+
+```text
+q0 = normalize_quaternion(pose.quaternion_xyzw[j0])
+bg0 = init_stats.gyro_mean
+```
+
+`q0` 保持 `q_WB` 方向，不求逆。`bg0` 是 Gyro Bias（陀螺仪零偏）初值，不会写回或修改 processed IMU 数据。
+
+### 9.3 初始协方差 P0
+
+```text
+N_static = static_end_idx - static_start_idx
+P_theta0 = diag(pose.cov_diag[j0, 3:6])
+P_bg0 = diag(init_stats.gyro_std**2 / N_static)
+P0 = block_diag(P_theta0, P_bg0)
+```
+
+姿态方差必须有限且严格大于零。姿态与 bias 的交叉块保持为零，不人为加入 cross-correlation，也不增加 uncertainty floor。
+
+### 9.4 连续时间过程噪声 Qc
+
+Gyro Noise Density（陀螺仪噪声密度）由当前静止数据估计：
+
+```text
+gyro_noise_density = init_stats.gyro_std * sqrt(init_stats.median_dt)
+Qg_diag = gyro_noise_density**2
+```
+
+这里使用真实 `median_dt`，不写死 200 Hz 或 `dt=0.005`。
+
+约 2 秒的静止数据不足以可靠估计 Gyro Bias Random Walk（陀螺仪零偏随机游走）。配置项 `gyro_bias_random_walk_density = 1e-4` 是第一版工程初值，不是题面参数或传感器标定结果。后续需要结合 bias trajectory、innovation 和最终姿态结果检查并调参。
+
+```text
+Qbg_diag = [density**2, density**2, density**2]
+Qc = diag(Qg_x, Qg_y, Qg_z, Qbg_x, Qbg_y, Qbg_z)
+```
+
+本阶段只构造连续时间 `Qc`，没有实现 `Gc`、`Qd`、`Phi` 或 `P` propagation。
+
+## 10. 运行方式
+
+使用安装了 NumPy 的 Python 环境：
+
+```powershell
+python scripts/check_pose_convention.py
+python scripts/check_initialization.py
+python -m unittest discover -s tests -v
+```
+
+`check_initialization.py` 只输出初始化索引、时间戳、`q0`、`bg0`、`diag(P0)`、静止统计、Noise Density 和 `diag(Qc)`，不是正式滤波入口。
+
+## 11. 开发期测试与最终提交整理
+
+`tests/`、`scripts/check_pose_convention.py` 和 `scripts/check_initialization.py` 都属于开发期验证资产，与正式算法模块隔离。当前保留这些文件用于人工审核和回归检查；项目完成后将单独执行 submission cleanup，只保留题目要求和程序正常运行所需的正式代码。

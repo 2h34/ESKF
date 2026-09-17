@@ -1,8 +1,8 @@
-"""Project-wide conventions and phase-1 preprocessing configuration.
+"""Project-wide conventions, preprocessing settings, and filter tuning.
 
-Only fixed conventions, data-quality thresholds, and numerical safety values
-belong here. Values estimated from the supplied recording are deliberately not
-stored in this module.
+Only fixed conventions, data-quality thresholds, numerical safety values, and
+explicit engineering tuning parameters belong here. Values estimated from the
+supplied recording are deliberately not stored in this module.
 """
 
 from __future__ import annotations
@@ -61,11 +61,24 @@ class AlignmentConfig:
 
 
 @dataclass(frozen=True)
+class FilterNoiseConfig:
+    """Continuous-time 6D ESKF noise tuning.
+
+    ``gyro_bias_random_walk_density`` is the amplitude of the white driving
+    noise in the later continuous gyro-bias random-walk model. The default is
+    an engineering starting value, not a calibration result from this dataset.
+    """
+
+    gyro_bias_random_walk_density: float = 1e-4
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     numerical: NumericalSafetyConfig = field(default_factory=NumericalSafetyConfig)
     preprocess: PreprocessConfig = field(default_factory=PreprocessConfig)
     static: StaticAnalysisConfig = field(default_factory=StaticAnalysisConfig)
     alignment: AlignmentConfig = field(default_factory=AlignmentConfig)
+    filter_noise: FilterNoiseConfig = field(default_factory=FilterNoiseConfig)
 
 
 DEFAULT_CONFIG = ProjectConfig()
