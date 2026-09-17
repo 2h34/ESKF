@@ -32,7 +32,10 @@ class ProcessedIMUData:
 class ProcessedPoseData:
     """Validated FAST-LIO poses.
 
-    ``quaternion_xyzw`` has shape ``(M, 4)`` and represents ``R_WB``. The
+    ``quaternion_xyzw`` has shape ``(M, 4)``. Runtime code interprets it as
+    ``R_WB`` under the documented project convention; standard FAST-LIO source
+    semantics and the gravity sanity check support that interpretation, while
+    the unavailable CSV export chain remains an explicit assumption. The
     covariance diagonal has order ``[x, y, z, roll, pitch, yaw]``.
     """
 
