@@ -17,9 +17,10 @@
 - FAST-LIO 四元数方向的源码与真实数据验证；
 - 6D ESKF Initialization（初始化）：`q0`、`bg0`、`P0`、`Qc`；
 - 6D ESKF Prediction：名义状态、`Fc/Gc/Phi/Qd` 与 `P` 预测；
-- 6D 姿态 Observation Update、Injection 与 Reset。
+- 6D 姿态 Observation Update、Injection 与 Reset；
+- 完整 6D Runner、逐帧 RPY 结果、debug 日志与整段 summary。
 
-尚未实现：正式主滤波循环、结果记录、RPY 结果绘图和任何 15D/位置/速度状态。当前没有 outlier gating 或自动噪声调参。
+尚未实现：RPY 结果绘图和任何 15D/位置/速度状态。当前没有 outlier gating、自动噪声调参或基于整段结果的参数调优。
 
 ## 3. 数据说明
 
@@ -178,7 +179,7 @@ bg[k+1] = bg[k]
 
 这里 `q_new = q_old ⊗ Exp(omega_B dt)` 的右乘来自两项物理定义：`q` 表示 `R_WB`，而陀螺仪角速度 `omega_B` 表达在 Body Frame。right-multiplicative error 则是 `R_true = R_hat Exp(delta_theta^)` 的误差状态 convention。两者在当前模型中相容，但名义姿态右乘不是由误差 convention 决定的。
 
-IMU index、真实 timestamp 和 `gyro[k] + dt[k+1]` 的调度由诊断脚本及未来 runner 负责。后续 pose matching 必须直接使用 `imu.timestamp[k]` 和 `alignment.pose_index_for_imu[k]`；不得使用滤波器内部累计时间，也不得从 `dt` 反推权威时间戳。
+IMU index、真实 timestamp 和 `gyro[k] + dt[k+1]` 的调度由诊断脚本及 [runner6d.py](runner6d.py) 负责。pose matching 必须直接使用 `imu.timestamp[k]` 和 `alignment.pose_index_for_imu[k]`；不得使用滤波器内部累计时间，也不得从 `dt` 反推权威时间戳。
 
 连续误差模型和噪声映射为：
 
@@ -243,7 +244,38 @@ Joseph Update 与 Reset 是两个不同步骤。最终 `0.5 * (P + P.T)` 只清�
 
 `ESKF6D` 持有创建时传入的 `NumericalSafetyConfig`，后续 covariance negative/symmetry tolerance 均来自该实例配置。Update 完成全部 residual、Joseph、Injection、Reset 和数值检查后才一次性提交 `q/bg/P`，中途失败不会留下半更新状态。NIS 仅用于开发期诊断，不用于 gating 或自动调参。
 
-## 12. 运行方式
+## 12. 完整 6D Runner 与输出
+
+[runner6d.py](runner6d.py) 只负责调度、整段数值安全检查和日志收集，不重新实现 ESKF 数学。`ESKF6D` 仍然只持有 `q`、`bg`、`P` 和 `Qc`，不持有 IMU index、timestamp 或 pose index。完整运行固定采用：
+
+```text
+Initialization posterior at k0
+    -> Prediction: gyro[k] + dt[k+1]
+    -> optional FAST-LIO Update at k+1
+    -> log posterior state at imu.timestamp[k+1]
+```
+
+当前 `k0 = 395`。初始化已经使用 `alignment.pose_index_for_imu[395]` 对应的 FAST-LIO 姿态建立 `q0/P0`，因此 Runner 只记录一次初始化 posterior，不会在 `k0` 重复调用 Update。第一条正式传播仍为 `395 -> 396`，使用 `gyro[395]` 和 `dt[396]`。
+
+每个后续 IMU index 的时间只读取 `imu.timestamp[k]`，pose 只读取预处理产生的 `alignment.pose_index_for_imu[k]`。Runner 不累加 `dt` 生成时间、不重新 nearest-match、不插值、不搜索相邻 pose，也不重复使用 pose。没有匹配时继续 Prediction；匹配姿态方差任一项 `<= 0` 时按 scheduler policy 跳过 Update 并记录原因。
+
+正式入口：
+
+```powershell
+python scripts/run_eskf6d.py
+```
+
+输出文件：
+
+- `results/eskf6d_result.csv`：正式逐帧 posterior 结果，包含真实 timestamp、IMU index、`xyzw` 四元数、ZYX RPY（rad）、gyro bias 和观测/update 标志；第一行是 `k0` 初始化状态。
+- `results/eskf6d_debug.csv`：开发期诊断，包含调度来源、`omega_hat`、`P` 数值安全量，以及有效 Update 的 residual、`R`、NIS、correction 和 Kalman gain 主要对角项；没有 Update 的字段保留为 `NaN`。
+- `results/eskf6d_summary.json`：整段范围、观测计数、四元数/协方差安全统计、bias、residual、NIS、RPY 与大 `dt` 统计。
+
+Runner 对每个最终 `P` 执行对称性和 PSD 检查；仅允许 `covariance_negative_tolerance` 范围内的极小数值负特征值，不执行 eigenvalue clipping。NIS 只记录，不用于 gating、reject、修改 `R/Q` 或自动 tuning。大 `dt` 使用真实间隔继续传播，统计阈值沿用预处理的 `timestamp_large_step_ratio * median_dt` 定义。
+
+完整运行成功只说明当前 6D ESKF 的调度、闭环计算和诊断输出能够从 `k0` 稳定执行到数据末尾。它不证明 `Q/R/P0` 或其他参数合理；参数合理性必须留到下一阶段结合 `P`、innovation、NIS、Kalman gain、bias 与最终姿态结果进行人工分析。
+
+## 13. 运行方式
 
 使用安装了 NumPy 的 Python 环境：
 
@@ -252,11 +284,12 @@ python scripts/check_pose_convention.py
 python scripts/check_initialization.py
 python scripts/check_prediction.py
 python scripts/check_update.py
+python scripts/run_eskf6d.py
 python -m unittest discover -s tests -v
 ```
 
-`check_initialization.py` 只输出初始化量；`check_prediction.py` 只检查第一个真实 Prediction 和后续 20 步 Prediction-only 短序列；`check_update.py` 只检查第一组真实 Prediction + Update。它们都不是正式滤波入口。
+`check_initialization.py` 只输出初始化量；`check_prediction.py` 只检查第一个真实 Prediction 和后续 20 步 Prediction-only 短序列；`check_update.py` 只检查第一组真实 Prediction + Update。它们都不是正式滤波入口。`run_eskf6d.py` 是本阶段完整运行和正式结果输出入口，但不包含绘图或调参。
 
-## 13. 开发期测试与最终提交整理
+## 14. 开发期测试与最终提交整理
 
 `tests/`、`scripts/check_pose_convention.py`、`scripts/check_initialization.py`、`scripts/check_prediction.py` 和 `scripts/check_update.py` 都属于开发期验证资产，与正式算法模块隔离。当前保留这些文件用于人工审核和回归检查；项目完成后将单独执行 submission cleanup，只保留题目要求和程序正常运行所需的正式代码。

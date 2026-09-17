@@ -1,7 +1,7 @@
 """Rotation helpers using xyzw Hamilton quaternions.
 
 Quaternions represent active body-to-world rotations ``R_WB``. Multiplication
-returns ``q1 tensor-product q2``. This convention is compatible with the future
+returns ``q1 tensor-product q2``. This convention is compatible with the current
 right-multiplicative error definition ``R_true = R_hat Exp(delta_theta^)``.
 """
 

@@ -287,7 +287,7 @@ class ESKF6D:
         try:
             np.linalg.cholesky(S)
             K = np.linalg.solve(S, PHt.T).T
-            whitened_residual = np.linalg.solve(S, r_theta)
+            innovation_solution = np.linalg.solve(S, r_theta)
         except np.linalg.LinAlgError as exc:
             raise ValueError(
                 "innovation covariance S must be positive definite and solvable"
@@ -342,7 +342,7 @@ class ESKF6D:
             np.max(np.abs(P_reset - P_reset.T))
         )
         q_norm = float(np.linalg.norm(q_after))
-        NIS = float(r_theta @ whitened_residual)
+        NIS = float(r_theta @ innovation_solution)
         if not np.isfinite(NIS):
             raise ValueError("NIS is not finite")
 
