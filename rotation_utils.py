@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from config import DEFAULT_CONFIG
+from config import DEFAULT_CONFIG, NumericalSafetyConfig
 
 
 FloatArray = NDArray[np.float64]
@@ -32,12 +32,15 @@ def hat(vector: ArrayLike) -> FloatArray:
     return np.array([[0.0, -z, y], [z, 0.0, -x], [-y, x, 0.0]], dtype=float)
 
 
-def normalize_quaternion(quaternion_xyzw: ArrayLike) -> FloatArray:
+def normalize_quaternion(
+    quaternion_xyzw: ArrayLike,
+    numerical: NumericalSafetyConfig = DEFAULT_CONFIG.numerical,
+) -> FloatArray:
     """Normalize one finite quaternion with storage order ``[x, y, z, w]``."""
 
     q = _vector(quaternion_xyzw, 4, "quaternion_xyzw")
     norm = float(np.linalg.norm(q))
-    minimum = DEFAULT_CONFIG.numerical.minimum_valid_quaternion_norm
+    minimum = numerical.minimum_valid_quaternion_norm
     if norm < minimum:
         raise ValueError(f"quaternion norm {norm:.3e} is below {minimum:.3e}")
     return q / norm
@@ -55,24 +58,30 @@ def quaternion_multiply(q1_xyzw: ArrayLike, q2_xyzw: ArrayLike) -> FloatArray:
     return np.concatenate((vector, np.array([scalar], dtype=float)))
 
 
-def quaternion_inverse(quaternion_xyzw: ArrayLike) -> FloatArray:
+def quaternion_inverse(
+    quaternion_xyzw: ArrayLike,
+    numerical: NumericalSafetyConfig = DEFAULT_CONFIG.numerical,
+) -> FloatArray:
     """Return the multiplicative inverse of a finite xyzw quaternion."""
 
     q = _vector(quaternion_xyzw, 4, "quaternion_xyzw")
     norm_sq = float(np.dot(q, q))
-    minimum_sq = DEFAULT_CONFIG.numerical.minimum_valid_quaternion_norm**2
+    minimum_sq = numerical.minimum_valid_quaternion_norm**2
     if norm_sq < minimum_sq:
         raise ValueError("cannot invert a near-zero quaternion")
     return np.array([-q[0], -q[1], -q[2], q[3]], dtype=float) / norm_sq
 
 
-def rotvec_to_quaternion(rotation_vector_rad: ArrayLike) -> FloatArray:
+def rotvec_to_quaternion(
+    rotation_vector_rad: ArrayLike,
+    numerical: NumericalSafetyConfig = DEFAULT_CONFIG.numerical,
+) -> FloatArray:
     """Convert a rotation vector in radians, shape ``(3,)``, to xyzw."""
 
     phi = _vector(rotation_vector_rad, 3, "rotation_vector_rad")
     theta = float(np.linalg.norm(phi))
     half_theta = 0.5 * theta
-    epsilon = DEFAULT_CONFIG.numerical.small_angle_epsilon
+    epsilon = numerical.small_angle_epsilon
     if theta < epsilon:
         # sin(theta/2)/theta = 1/2 - theta^2/48 + theta^4/3840 + O(theta^6)
         theta_sq = theta * theta
@@ -80,18 +89,21 @@ def rotvec_to_quaternion(rotation_vector_rad: ArrayLike) -> FloatArray:
     else:
         scale = np.sin(half_theta) / theta
     quaternion = np.concatenate((scale * phi, np.array([np.cos(half_theta)])))
-    return normalize_quaternion(quaternion)
+    return normalize_quaternion(quaternion, numerical)
 
 
-def quaternion_to_rotvec(quaternion_xyzw: ArrayLike) -> FloatArray:
+def quaternion_to_rotvec(
+    quaternion_xyzw: ArrayLike,
+    numerical: NumericalSafetyConfig = DEFAULT_CONFIG.numerical,
+) -> FloatArray:
     """Convert an xyzw quaternion to the shortest rotation vector in radians."""
 
-    q = normalize_quaternion(quaternion_xyzw)
+    q = normalize_quaternion(quaternion_xyzw, numerical)
     if q[3] < 0.0:
         q = -q
     vector = q[:3]
     vector_norm = float(np.linalg.norm(vector))
-    epsilon = DEFAULT_CONFIG.numerical.small_angle_epsilon
+    epsilon = numerical.small_angle_epsilon
     if vector_norm < epsilon:
         return 2.0 * vector
     angle = 2.0 * np.arctan2(vector_norm, q[3])

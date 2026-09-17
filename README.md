@@ -16,9 +16,10 @@
 - processed `.npz` 的强校验加载器；
 - FAST-LIO 四元数方向的源码与真实数据验证；
 - 6D ESKF Initialization（初始化）：`q0`、`bg0`、`P0`、`Qc`；
-- 6D ESKF Prediction：名义状态、`Fc/Gc/Phi/Qd` 与 `P` 预测。
+- 6D ESKF Prediction：名义状态、`Fc/Gc/Phi/Qd` 与 `P` 预测；
+- 6D 姿态 Observation Update、Injection 与 Reset。
 
-尚未实现：Observation Update、Kalman Gain、Joseph Update、Injection、Reset、主滤波循环、RPY 结果绘图和任何 15D/位置/速度状态。
+尚未实现：正式主滤波循环、结果记录、RPY 结果绘图和任何 15D/位置/速度状态。当前没有 outlier gating 或自动噪声调参。
 
 ## 3. 数据说明
 
@@ -201,9 +202,48 @@ P_new = Phi @ P_old @ Phi.T + Qd
 
 预测后对 `P` 做 `0.5 * (P + P.T)` 数值对称化，并检查有限性、对称性和对角线非负性；不把明显负值偷偷 clamp 为零。
 
-当前 Prediction 不读取 CSV、不修复时间戳、不插值 IMU，也不包含 FAST-LIO residual、`H/S/K`、Measurement Update、Injection 或 Reset。
+当前 Prediction 不读取 CSV、不修复时间戳、不插值 IMU。姿态观测更新由同一数学模块的独立 `update_attitude()` 完成，调度和 pose selection 仍在模块外部。
 
-## 11. 运行方式
+## 11. 第二阶段：Observation Update、Injection 与 Reset
+
+`update_attitude(q_obs_xyzw, R_attitude)` 只接收 FAST-LIO 姿态和 `3x3` 姿态协方差，不接收 timestamp、IMU index 或 pose index。未来 scheduler 决定是否调用：若原始 pose 的任一姿态方差 `<= 0`，直接跳过该观测，不构造零 `R`；若非法 `R` 被传入数学模块，函数明确报错，不添加 floor 或 epsilon。
+
+四元数存在 `q == -q` 的双覆盖。计算 residual 前先根据 `dot(q_pred, q_obs)` 对齐符号，然后按照右乘误差 convention 构造：
+
+```text
+q_rel = inverse(q_pred) ⊗ q_obs_aligned
+r_theta = Log(q_rel)
+H = [I3  0]
+```
+
+`R_attitude = diag(cov_33, cov_44, cov_55)` 继续作为局部右乘 rotation-vector residual covariance 的小误差近似；当前不增加 Euler-to-tangent Jacobian。
+
+Innovation 与增益使用线性求解而非显式矩阵求逆：
+
+```text
+S = H P H.T + R
+K = P H.T S^-1
+delta_x = K r_theta
+```
+
+`delta_x` 只是一轮更新的临时量。Measurement covariance 先采用 Joseph Form，随后分别执行名义状态 Injection 和 error-coordinate Reset：
+
+```text
+A = I - K H
+P_upd = A P A.T + K R K.T
+
+q <- q ⊗ Exp(delta_theta)
+bg <- bg + delta_bg
+
+G_reset[0:3, 0:3] = I - 0.5 * hat(delta_theta)
+P <- G_reset P_upd G_reset.T
+```
+
+Joseph Update 与 Reset 是两个不同步骤。最终 `0.5 * (P + P.T)` 只清除 floating-point arithmetic 产生的微小非对称误差，不是新的滤波公式；若平均前的不对称超过 `covariance_symmetry_tolerance`，直接报错，不能靠平均掩盖明显错误。
+
+`ESKF6D` 持有创建时传入的 `NumericalSafetyConfig`，后续 covariance negative/symmetry tolerance 均来自该实例配置。Update 完成全部 residual、Joseph、Injection、Reset 和数值检查后才一次性提交 `q/bg/P`，中途失败不会留下半更新状态。NIS 仅用于开发期诊断，不用于 gating 或自动调参。
+
+## 12. 运行方式
 
 使用安装了 NumPy 的 Python 环境：
 
@@ -211,11 +251,12 @@ P_new = Phi @ P_old @ Phi.T + Qd
 python scripts/check_pose_convention.py
 python scripts/check_initialization.py
 python scripts/check_prediction.py
+python scripts/check_update.py
 python -m unittest discover -s tests -v
 ```
 
-`check_initialization.py` 只输出初始化量；`check_prediction.py` 只检查第一个真实 Prediction 和后续 20 步 Prediction-only 短序列。二者都不是正式滤波入口。
+`check_initialization.py` 只输出初始化量；`check_prediction.py` 只检查第一个真实 Prediction 和后续 20 步 Prediction-only 短序列；`check_update.py` 只检查第一组真实 Prediction + Update。它们都不是正式滤波入口。
 
-## 12. 开发期测试与最终提交整理
+## 13. 开发期测试与最终提交整理
 
-`tests/`、`scripts/check_pose_convention.py`、`scripts/check_initialization.py` 和 `scripts/check_prediction.py` 都属于开发期验证资产，与正式算法模块隔离。当前保留这些文件用于人工审核和回归检查；项目完成后将单独执行 submission cleanup，只保留题目要求和程序正常运行所需的正式代码。
+`tests/`、`scripts/check_pose_convention.py`、`scripts/check_initialization.py`、`scripts/check_prediction.py` 和 `scripts/check_update.py` 都属于开发期验证资产，与正式算法模块隔离。当前保留这些文件用于人工审核和回归检查；项目完成后将单独执行 submission cleanup，只保留题目要求和程序正常运行所需的正式代码。

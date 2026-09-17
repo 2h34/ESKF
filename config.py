@@ -29,6 +29,7 @@ class NumericalSafetyConfig:
     maximum_quaternion_normalization_error: float = 1e-3
     small_angle_epsilon: float = 1e-8
     covariance_negative_tolerance: float = 1e-12
+    covariance_symmetry_tolerance: float = 1e-12
 
 
 @dataclass(frozen=True)

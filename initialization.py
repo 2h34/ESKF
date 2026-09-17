@@ -118,7 +118,7 @@ def initialize_eskf6d(
     if pose_index >= pose_quaternion.shape[0]:
         raise ValueError(f"matched pose index {pose_index} is out of range")
 
-    q0 = normalize_quaternion(pose_quaternion[pose_index])
+    q0 = normalize_quaternion(pose_quaternion[pose_index], config.numerical)
     bg0 = _finite_vector(init_stats.gyro_mean, "init_stats.gyro_mean")
     gyro_static_std = _finite_vector(
         init_stats.gyro_std, "init_stats.gyro_std"
