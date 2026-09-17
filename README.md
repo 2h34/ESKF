@@ -15,9 +15,10 @@
 - `xyzw` 四元数与旋转工具；
 - processed `.npz` 的强校验加载器；
 - FAST-LIO 四元数方向的源码与真实数据验证；
-- 6D ESKF Initialization（初始化）：`q0`、`bg0`、`P0`、`Qc`。
+- 6D ESKF Initialization（初始化）：`q0`、`bg0`、`P0`、`Qc`；
+- 6D ESKF Prediction：名义状态、`Fc/Gc/Phi/Qd` 与 `P` 预测。
 
-尚未实现：Prediction、名义四元数递推、`Fc/Gc/Phi/Qd`、协方差传播、Observation Update、Kalman Gain、Injection、Reset、主滤波循环、RPY 结果绘图和任何 15D/位置/速度状态。
+尚未实现：Observation Update、Kalman Gain、Joseph Update、Injection、Reset、主滤波循环、RPY 结果绘图和任何 15D/位置/速度状态。
 
 ## 3. 数据说明
 
@@ -72,7 +73,7 @@ python scripts/run_preprocess.py
 | `q = R_WB` | 0.736329 deg | 0.656430 deg | 1.699284 deg | 0.146254 m/s^2 |
 | `q = R_BW` | 1.335364 deg | 1.293349 deg | 2.516289 deg | 0.240803 m/s^2 |
 
-`R_WB` 在 86.17% 的样本上角误差更小；代表性平均姿态的误差分别为 0.400813 deg 与 1.231878 deg。源码/frame 语义和重力检查共同给出 **Strongly supports `R_WB`**。重力只能约束 roll/pitch 方向，不能独立验证 yaw 语义。
+`R_WB` 在 86.17% 的样本上角误差更小；代表性平均姿态的误差分别为 0.400813 deg 与 1.231878 deg。在本项目设定的启发式判据下，真实数据支持 `R_WB`；结合标准 FAST-LIO 的源码和 frame 语义，本项目采用 `R_WB` 约定。重力只能约束 roll/pitch 方向，不能独立验证 yaw 语义。
 
 复验命令：
 
@@ -115,7 +116,7 @@ t0 = imu.timestamp[k0]
 j0 = alignment.pose_index_for_imu[k0]
 ```
 
-`j0` 必须有效；若为 `-1`，直接报错，不前后搜索、不插值，也不改变 `k0`。`q0`、`bg0` 和 `P0` 都表示 `t0` 时刻的初始化状态。未来 Prediction 的第一步应为 `395 -> 396`，使用 `imu.dt[396]`，但当前阶段没有实现该步骤。
+`j0` 必须有效；若为 `-1`，直接报错，不前后搜索、不插值，也不改变 `k0`。`q0`、`bg0` 和 `P0` 都表示 `t0` 时刻的初始化状态。Prediction 的第一步为 `395 -> 396`，使用 `gyro[395]` 和 `imu.dt[396]`。
 
 ### 9.2 名义状态初值
 
@@ -155,20 +156,60 @@ Qbg_diag = [density**2, density**2, density**2]
 Qc = diag(Qg_x, Qg_y, Qg_z, Qbg_x, Qbg_y, Qbg_z)
 ```
 
-本阶段只构造连续时间 `Qc`，没有实现 `Gc`、`Qd`、`Phi` 或 `P` propagation。
+Initialization 模块只构造连续时间 `Qc`；离散化和协方差预测由 `eskf6d.py` 负责。
 
-## 10. 运行方式
+## 10. 第二阶段：6D ESKF Prediction
+
+[eskf6d.py](eskf6d.py) 维护 `q_WB`、`b_g`、`P`、固定的 `Qc` 以及当前 IMU 索引和时间戳。每次 `predict()` 使用 Zero-Order Hold（零阶保持）的左端点约定：
+
+```text
+state[k] + gyro[k] + dt[k+1] -> state[k+1]
+```
+
+不使用 `gyro[k+1]`、相邻均值或 midpoint integration。名义状态预测为：
+
+```text
+omega_hat = gyro[k] - bg
+delta_theta = omega_hat * dt[k+1]
+q[k+1] = normalize(q[k] ⊗ Exp(delta_theta))
+bg[k+1] = bg[k]
+```
+
+右乘四元数增量与项目的 right-multiplicative error convention 一致。连续误差模型和噪声映射为：
+
+```text
+Fc = [-hat(omega_hat)  -I]
+     [       0          0]
+
+Gc = [-I  0]
+     [ 0  I]
+```
+
+第一版只采用一阶离散近似：
+
+```text
+Phi ≈ I + Fc * dt
+Qd ≈ Gc @ Qc @ Gc.T * dt
+P_new = Phi @ P_old @ Phi.T + Qd
+```
+
+`Qd` 使用每一步真实 `dt[k+1]`，不使用静止段 `median_dt` 或写死的 200 Hz。预测后对 `P` 做 `0.5 * (P + P.T)` 数值对称化，并检查有限性、对称性和对角线非负性；不把明显负值偷偷 clamp 为零。
+
+当前 Prediction 不读取 CSV、不修复时间戳、不插值 IMU，也不包含 FAST-LIO residual、`H/S/K`、Measurement Update、Injection 或 Reset。
+
+## 11. 运行方式
 
 使用安装了 NumPy 的 Python 环境：
 
 ```powershell
 python scripts/check_pose_convention.py
 python scripts/check_initialization.py
+python scripts/check_prediction.py
 python -m unittest discover -s tests -v
 ```
 
-`check_initialization.py` 只输出初始化索引、时间戳、`q0`、`bg0`、`diag(P0)`、静止统计、Noise Density 和 `diag(Qc)`，不是正式滤波入口。
+`check_initialization.py` 只输出初始化量；`check_prediction.py` 只检查第一个真实 Prediction 和后续 20 步 Prediction-only 短序列。二者都不是正式滤波入口。
 
-## 11. 开发期测试与最终提交整理
+## 12. 开发期测试与最终提交整理
 
-`tests/`、`scripts/check_pose_convention.py` 和 `scripts/check_initialization.py` 都属于开发期验证资产，与正式算法模块隔离。当前保留这些文件用于人工审核和回归检查；项目完成后将单独执行 submission cleanup，只保留题目要求和程序正常运行所需的正式代码。
+`tests/`、`scripts/check_pose_convention.py`、`scripts/check_initialization.py` 和 `scripts/check_prediction.py` 都属于开发期验证资产，与正式算法模块隔离。当前保留这些文件用于人工审核和回归检查；项目完成后将单独执行 submission cleanup，只保留题目要求和程序正常运行所需的正式代码。
