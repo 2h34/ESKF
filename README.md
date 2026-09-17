@@ -18,9 +18,10 @@
 - 6D ESKF Initialization（初始化）：`q0`、`bg0`、`P0`、`Qc`；
 - 6D ESKF Prediction：名义状态、`Fc/Gc/Phi/Qd` 与 `P` 预测；
 - 6D 姿态 Observation Update、Injection 与 Reset；
-- 完整 6D Runner、逐帧 RPY 结果、debug 日志与整段 summary。
+- 完整 6D Runner、逐帧 RPY 结果、debug 日志与整段 summary；
+- 正式 RPY 提交数据、Roll/Pitch/Yaw 曲线和 FAST-LIO Observation Reference 对比图。
 
-尚未实现：RPY 结果绘图和任何 15D/位置/速度状态。当前没有 outlier gating、自动噪声调参或基于整段结果的参数调优。
+尚未实现：任何 15D/位置/速度状态。当前没有 outlier gating、自动噪声调参或基于整段结果的参数调优。
 
 ## 3. 数据说明
 
@@ -281,9 +282,31 @@ Runner 对每个最终 `P` 执行对称性和 PSD 检查；仅允许 `covariance
 
 `chi-square(df=3)` 阈值只是在标准独立 Gaussian Kalman 假设下的诊断参考。FAST-LIO 本身使用 IMU，Prediction 与 Observation 并不严格独立。本阶段不做 NIS gating、observation rejection 或 tuning，不修改 ESKF 数学、`Q/R/P0` 或正式 result 输出，也不根据相关性自动生成参数结论。
 
-## 14. 运行方式
+## 14. Phase 2.5：正式 RPY 曲线与实验结果
 
-使用安装了 NumPy 的 Python 环境：
+[plot_result.py](plot_result.py) 只读取已冻结的正式结果和已有诊断摘要，不重新运行或修改滤波器。入口为：
+
+```powershell
+python scripts/plot_eskf6d_results.py
+```
+
+该命令生成 `results/rpy_result.csv`、五张 PNG 图和 `results/experiment_result_summary.json`。RPY CSV 保留与 `eskf6d_result.csv` 逐元素一致的 raw radians，同时提供 degrees；时间轴严格使用 `timestamp - timestamp[0]`，不通过累加 `dt` 重建。Yaw 仅在绘图和提交用衍生列中执行 unwrap，Roll/Pitch 不 unwrap，所有曲线均未平滑、滤波、删帧或重采样。Yaw is unwrapped for visualization only.
+
+本次完整实验持续 `126.094735 s`，包含 `25219` 个 posterior 输出帧、`25218` 次 Prediction 和 `25212` 次成功 Update。最大四元数范数误差为 `2.220446049250313e-16`，最大 `P` 对称误差为 `0.0`，最小 `P` 特征值为 `2.1881125014605517e-09`，正式结果全部为有限数值。
+
+![Roll-Time](results/figures/roll_time.png)
+
+![Pitch-Time](results/figures/pitch_time.png)
+
+![Yaw-Time](results/figures/yaw_time.png)
+
+总览及观测对比另见 `results/figures/rpy_overview.png` 和 `results/figures/rpy_fastlio_comparison.png`。FAST-LIO 姿态只按已有 `pose_index_for_imu` 映射，未重新匹配或插值。由于 FAST-LIO 本身使用 IMU，它在此只是 **Observation Reference**，不是独立 Ground Truth；该图仅展示趋势和观测一致性，不用于宣称真实姿态 RMSE。
+
+完整 6D ESKF 能够稳定运行，大多数时段 Prediction 与 FAST-LIO Observation residual 较小；较强动态旋转时，局部 y/z 方向 residual 更明显。正式 Prediction 仍采用 left-endpoint ZOH：`delta_theta = omega[k] * dt`。离线诊断表明，相邻 gyro 平均值的梯形近似能降低多数典型动态 interval 的单步姿态增量误差，因此 left-endpoint ZOH 是已确认的部分动态误差来源，但 high-NIS 的 p95/max 尾部仍未消除，它不是唯一根因。诊断也未发现稳定、一致且能显著降低 RMSE 的固定时间偏移，因此固定 FAST-LIO latency 假设被削弱。本作业正式版本不升级传播方法、不调参；更高阶 propagation 仅作为后续工程优化方向。
+
+## 15. 运行方式
+
+使用安装了 NumPy 和 Matplotlib 的 Python 环境：
 
 ```powershell
 python scripts/check_pose_convention.py
@@ -292,11 +315,12 @@ python scripts/check_prediction.py
 python scripts/check_update.py
 python scripts/run_eskf6d.py
 python scripts/analyze_eskf6d.py
+python scripts/plot_eskf6d_results.py
 python -m unittest discover -s tests -v
 ```
 
-`check_initialization.py` 只输出初始化量；`check_prediction.py` 只检查第一个真实 Prediction 和后续 20 步 Prediction-only 短序列；`check_update.py` 只检查第一组真实 Prediction + Update。它们都不是正式滤波入口。`run_eskf6d.py` 是本阶段完整运行和正式结果输出入口，但不包含绘图或调参。
+`check_initialization.py` 只输出初始化量；`check_prediction.py` 只检查第一个真实 Prediction 和后续 20 步 Prediction-only 短序列；`check_update.py` 只检查第一组真实 Prediction + Update。它们都不是正式滤波入口。`run_eskf6d.py` 是完整运行和正式结果输出入口；`plot_eskf6d_results.py` 只整理已保存结果，不会重跑滤波或调参。
 
-## 15. 开发期测试与最终提交整理
+## 16. 开发期测试与最终提交整理
 
 `tests/`、`scripts/check_pose_convention.py`、`scripts/check_initialization.py`、`scripts/check_prediction.py` 和 `scripts/check_update.py` 都属于开发期验证资产，与正式算法模块隔离。当前保留这些文件用于人工审核和回归检查；项目完成后将单独执行 submission cleanup，只保留题目要求和程序正常运行所需的正式代码。
