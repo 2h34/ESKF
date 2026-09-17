@@ -1,0 +1,54 @@
+Phase-1 preprocessing diagnostic report
+
+IMU
+  samples: raw=25615, processed=25614
+  time range: 1786181234.055607796 to 1786181362.150010824
+  duration: 128.094403028 s
+  dt mean/median/min/max: 0.005001148 / 0.004918337 / 0.003260136 / 0.020373583 s
+  estimated frequency: 203.320762 Hz
+  invalid rows dropped: 1 (CSV rows (25565,))
+  small/large timestamp steps: 0 / 4
+  large-step destination indices: (4, 5, 6, 25563)
+  large-step dt values: (0.009688138961791992, 0.02037358283996582, 0.00989079475402832, 0.010091781616210938) s
+
+Static segment
+  candidate index range [start, end): [0, 396)
+  selected index range [start, end): [0, 396)
+  selected time range: 1786181234.055607796 to 1786181236.055275679
+  duration: 1.999667883 s
+  sample count: 396
+  gyro mean rad/s: [0.000403192, 0.00239105 , 0.016651391]
+  gyro std rad/s: [0.004561046, 0.002088306, 0.003267578]
+  acc mean m/s^2: [-0.09836932 , -0.032547742,  9.752293723]
+  acc std m/s^2: [0.122906911, 0.022476404, 0.039575361]
+  |acc| mean/std: 9.753640992 / 0.040418277 m/s^2
+  accepted as static: True
+  reasons: gyro mean norm within threshold; gyro component standard deviations within threshold; accelerometer norm mean is close to 9.81 m/s^2; accelerometer component standard deviations within threshold; accelerometer norm standard deviation within threshold
+
+FAST-LIO pose
+  samples: raw=25580, processed=25580
+  time range: 1786181234.225484610 to 1786181362.119931459
+  duration: 127.894446850 s
+  median dt / frequency: 0.004903555 s / 203.933680 Hz
+  raw quaternion norm mean/min/max: 0.999999997880 / 0.999999305099 / 1.000000690398
+  invalid quaternion frames: 0
+  invalid covariance frames: 0
+  all-zero covariance frames: 20
+  covariance diagonal min: [0., 0., 0., 0., 0., 0.]
+  covariance diagonal mean: [1.357812258e-06, 1.589729782e-06, 1.201334726e-06, 1.186938509e-07,
+ 8.788268421e-08, 8.333604276e-08]
+  covariance diagonal median: [1.279865e-06, 1.566339e-06, 1.220458e-06, 1.211821e-07, 7.421316e-08,
+ 7.928116e-08]
+  covariance diagonal max: [2.309515e-06, 2.606008e-06, 2.180535e-06, 2.580956e-07, 2.734391e-07,
+ 1.937710e-07]
+
+Timestamp alignment
+  tolerance: 0.002459168 s
+  valid matches: 25579
+  unmatched IMU: 35
+  unused pose: 1
+  match ratio: 99.863355977%
+  absolute error mean/median/max: 0.000000000 / 0.000000000 / 0.000000000 s
+  duplicate pose use: 0
+  unmatched IMU indices: (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 25608, 25609, 25610, 25611, 25612, 25613)
+  unused pose indices: (25534,)
