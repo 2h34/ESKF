@@ -27,10 +27,8 @@ FloatArray = NDArray[np.float64]
 
 @dataclass(frozen=True)
 class ESKF6DState:
-    """Immutable copy of the runtime state at one IMU index."""
+    """Immutable copy of the mathematical filter state."""
 
-    imu_index: int
-    timestamp: float
     q_xyzw: FloatArray
     bg_rad_s: FloatArray
     P: FloatArray
@@ -40,10 +38,6 @@ class ESKF6DState:
 class PredictionDebug:
     """One-step prediction quantities retained for development-time review."""
 
-    imu_index_before: int
-    imu_index_after: int
-    timestamp_before: float
-    timestamp_after: float
     dt_s: float
     gyro_measurement_rad_s: FloatArray
     omega_hat_rad_s: FloatArray
@@ -84,16 +78,12 @@ def _covariance_matrix(value: ArrayLike, name: str) -> FloatArray:
 
 
 class ESKF6D:
-    """Maintain and predict the 6D attitude/bias ESKF state."""
+    """Maintain and predict only the mathematical 6D attitude/bias state.
+
+    IMU indices, timestamps, and pose matching belong to the caller/runner.
+    """
 
     def __init__(self, initialization: ESKF6DInitialization) -> None:
-        self._imu_index = int(initialization.imu_index)
-        self._timestamp = float(initialization.timestamp)
-        if self._imu_index < 0:
-            raise ValueError("initialization imu_index must be non-negative")
-        if not np.isfinite(self._timestamp):
-            raise ValueError("initialization timestamp must be finite")
-
         self._q_xyzw = normalize_quaternion(initialization.q0_xyzw)
         self._bg_rad_s = _finite_vector(
             initialization.bg0_rad_s, 3, "initialization.bg0_rad_s"
@@ -119,18 +109,17 @@ class ESKF6D:
         """Return an immutable snapshot whose arrays do not alias internal state."""
 
         return ESKF6DState(
-            imu_index=self._imu_index,
-            timestamp=self._timestamp,
             q_xyzw=self._q_xyzw.copy(),
             bg_rad_s=self._bg_rad_s.copy(),
             P=self._P.copy(),
         )
 
     def predict(self, gyro_rad_s: ArrayLike, dt_s: float) -> PredictionDebug:
-        """Advance one left-endpoint ZOH step from index ``k`` to ``k + 1``.
+        """Apply one left-endpoint ZOH mathematical prediction.
 
-        The caller supplies ``gyro[k]`` and ``dt[k+1]``. State mutation occurs
-        only after the complete candidate state passes numerical validation.
+        The caller owns scheduling and supplies the selected left-endpoint gyro
+        measurement and interval. State mutation occurs only after the complete
+        candidate state passes numerical validation.
         """
 
         gyro = _finite_vector(gyro_rad_s, 3, "gyro_rad_s")
@@ -138,8 +127,6 @@ class ESKF6D:
         if not np.isfinite(dt) or dt <= 0.0:
             raise ValueError("dt_s must be finite and strictly positive")
 
-        index_before = self._imu_index
-        timestamp_before = self._timestamp
         q_before = self._q_xyzw.copy()
         P_before = self._P.copy()
 
@@ -164,21 +151,13 @@ class ESKF6D:
         P_after = 0.5 * (P_after + P_after.T)
         P_after = _covariance_matrix(P_after, "predicted P")
 
-        index_after = index_before + 1
-        timestamp_after = timestamp_before + dt
         q_norm = float(np.linalg.norm(q_after))
         symmetry_error = float(np.max(np.abs(P_after - P_after.T)))
 
-        self._imu_index = index_after
-        self._timestamp = timestamp_after
         self._q_xyzw = q_after
         self._P = P_after
 
         return PredictionDebug(
-            imu_index_before=index_before,
-            imu_index_after=index_after,
-            timestamp_before=timestamp_before,
-            timestamp_after=timestamp_after,
             dt_s=dt,
             gyro_measurement_rad_s=gyro,
             omega_hat_rad_s=omega_hat,

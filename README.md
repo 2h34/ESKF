@@ -160,7 +160,7 @@ Initialization 模块只构造连续时间 `Qc`；离散化和协方差预测由
 
 ## 10. 第二阶段：6D ESKF Prediction
 
-[eskf6d.py](eskf6d.py) 维护 `q_WB`、`b_g`、`P`、固定的 `Qc` 以及当前 IMU 索引和时间戳。每次 `predict()` 使用 Zero-Order Hold（零阶保持）的左端点约定：
+[eskf6d.py](eskf6d.py) 只维护数学滤波状态 `q_WB`、`b_g`、`P` 和固定的 `Qc`，不维护 IMU index 或 timestamp。每次 `predict()` 的调用方使用 Zero-Order Hold（零阶保持）的左端点约定：
 
 ```text
 state[k] + gyro[k] + dt[k+1] -> state[k+1]
@@ -175,7 +175,11 @@ q[k+1] = normalize(q[k] ⊗ Exp(delta_theta))
 bg[k+1] = bg[k]
 ```
 
-右乘四元数增量与项目的 right-multiplicative error convention 一致。连续误差模型和噪声映射为：
+这里 `q_new = q_old ⊗ Exp(omega_B dt)` 的右乘来自两项物理定义：`q` 表示 `R_WB`，而陀螺仪角速度 `omega_B` 表达在 Body Frame。right-multiplicative error 则是 `R_true = R_hat Exp(delta_theta^)` 的误差状态 convention。两者在当前模型中相容，但名义姿态右乘不是由误差 convention 决定的。
+
+IMU index、真实 timestamp 和 `gyro[k] + dt[k+1]` 的调度由诊断脚本及未来 runner 负责。后续 pose matching 必须直接使用 `imu.timestamp[k]` 和 `alignment.pose_index_for_imu[k]`；不得使用滤波器内部累计时间，也不得从 `dt` 反推权威时间戳。
+
+连续误差模型和噪声映射为：
 
 ```text
 Fc = [-hat(omega_hat)  -I]
@@ -193,7 +197,9 @@ Qd ≈ Gc @ Qc @ Gc.T * dt
 P_new = Phi @ P_old @ Phi.T + Qd
 ```
 
-`Qd` 使用每一步真实 `dt[k+1]`，不使用静止段 `median_dt` 或写死的 200 Hz。预测后对 `P` 做 `0.5 * (P + P.T)` 数值对称化，并检查有限性、对称性和对角线非负性；不把明显负值偷偷 clamp 为零。
+`Qd ≈ Gc Qc Gc.T dt` 是当前第一版的一阶离散近似，忽略高阶 `dt^2/dt^3` 噪声耦合。当前作业接受这一简化；完整 6D 闭环完成后，需要结合 `P`、innovation、`K` 和最终姿态结果重新检查离散化是否足够。`Qd` 使用每一步真实 `dt[k+1]`，不使用静止段 `median_dt` 或写死的 200 Hz。
+
+预测后对 `P` 做 `0.5 * (P + P.T)` 数值对称化，并检查有限性、对称性和对角线非负性；不把明显负值偷偷 clamp 为零。
 
 当前 Prediction 不读取 CSV、不修复时间戳、不插值 IMU，也不包含 FAST-LIO residual、`H/S/K`、Measurement Update、Injection 或 Reset。
 

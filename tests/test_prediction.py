@@ -1,5 +1,5 @@
 import unittest
-from dataclasses import replace
+from dataclasses import fields, replace
 from pathlib import Path
 
 import numpy as np
@@ -119,20 +119,26 @@ class PredictionTests(unittest.TestCase):
     def test_real_first_step_uses_gyro_395_and_dt_396(self) -> None:
         filter_6d = ESKF6D.from_initialization(self.real_initialization)
         k = self.real_initialization.imu_index
+        next_k = k + 1
         self.assertEqual(k, 395)
-        debug = filter_6d.predict(self.imu.gyro_rad_s[k], self.imu.dt[k + 1])
+        self.assertEqual(next_k, 396)
+        old_timestamp = float(self.imu.timestamp[k])
+        new_timestamp = float(self.imu.timestamp[next_k])
+        dt = float(self.imu.dt[next_k])
+        self.assertAlmostEqual(new_timestamp - old_timestamp, dt, places=12)
 
-        self.assertEqual(debug.imu_index_before, 395)
-        self.assertEqual(debug.imu_index_after, 396)
+        debug = filter_6d.predict(self.imu.gyro_rad_s[k], dt)
+
         np.testing.assert_array_equal(
             debug.gyro_measurement_rad_s, self.imu.gyro_rad_s[395]
         )
         self.assertEqual(debug.dt_s, float(self.imu.dt[396]))
-        self.assertAlmostEqual(
-            filter_6d.get_state().timestamp,
-            float(self.imu.timestamp[396]),
-            places=9,
+        self.assertEqual(
+            {field.name for field in fields(filter_6d.get_state())},
+            {"q_xyzw", "bg_rad_s", "P"},
         )
+        self.assertFalse(hasattr(filter_6d, "_imu_index"))
+        self.assertFalse(hasattr(filter_6d, "_timestamp"))
 
 
 if __name__ == "__main__":

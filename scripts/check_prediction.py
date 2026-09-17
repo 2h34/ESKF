@@ -32,15 +32,17 @@ def _array(value: np.ndarray) -> str:
 
 def _first_step_report(
     debug: PredictionDebug,
+    gyro_index: int,
+    dt_index: int,
     old_timestamp: float,
     new_timestamp: float,
     bg_rad_s: np.ndarray,
 ) -> list[str]:
     return [
         "First real prediction (left-endpoint ZOH)",
-        f"State transition: {debug.imu_index_before} -> {debug.imu_index_after}",
-        f"Gyro source index: {debug.imu_index_before}",
-        f"dt source index: {debug.imu_index_after}",
+        f"State transition: {gyro_index} -> {dt_index}",
+        f"Gyro source index: {gyro_index}",
+        f"dt source index: {dt_index}",
         f"Old timestamp: {old_timestamp:.9f} s",
         f"New timestamp: {new_timestamp:.9f} s",
         f"dt: {debug.dt_s:.12f} s",
@@ -86,19 +88,21 @@ def run(processed_directory: Path) -> None:
     filter_6d = ESKF6D.from_initialization(initialization)
     initial_bg = initialization.bg0_rad_s.copy()
     first_k = initialization.imu_index
+    first_next_k = first_k + 1
+    first_old_timestamp = float(imu.timestamp[first_k])
+    first_new_timestamp = float(imu.timestamp[first_next_k])
+    first_dt = float(imu.dt[first_next_k])
     first_debug = filter_6d.predict(
-        imu.gyro_rad_s[first_k], imu.dt[first_k + 1]
+        imu.gyro_rad_s[first_k], first_dt
     )
 
-    if first_debug.imu_index_after != first_k + 1:
-        raise RuntimeError("prediction did not advance exactly one IMU index")
     if not np.isclose(
-        first_debug.timestamp_after,
-        imu.timestamp[first_k + 1],
+        first_new_timestamp - first_old_timestamp,
+        first_dt,
         rtol=0.0,
-        atol=1e-9,
+        atol=1e-12,
     ):
-        raise RuntimeError("prediction timestamp does not match the next IMU sample")
+        raise RuntimeError("dt[k+1] does not match the authoritative IMU timestamps")
 
     for gyro_index in range(first_k + 1, first_k + PREDICTION_STEPS):
         filter_6d.predict(
@@ -106,6 +110,8 @@ def run(processed_directory: Path) -> None:
         )
 
     final_state = filter_6d.get_state()
+    final_imu_index = first_k + PREDICTION_STEPS
+    final_timestamp = float(imu.timestamp[final_imu_index])
     final_symmetry_error = float(
         np.max(np.abs(final_state.P - final_state.P.T))
     )
@@ -118,15 +124,17 @@ def run(processed_directory: Path) -> None:
         "",
         *_first_step_report(
             first_debug,
-            float(imu.timestamp[first_k]),
-            float(imu.timestamp[first_k + 1]),
+            first_k,
+            first_next_k,
+            first_old_timestamp,
+            first_new_timestamp,
             initial_bg,
         ),
         "",
         "Short prediction-only run",
         f"Prediction steps: {PREDICTION_STEPS}",
-        f"Final IMU index: {final_state.imu_index}",
-        f"Final timestamp: {final_state.timestamp:.9f} s",
+        f"Final IMU index (scheduler): {final_imu_index}",
+        f"Final timestamp from imu.timestamp: {final_timestamp:.9f} s",
         f"Final quaternion norm: {np.linalg.norm(final_state.q_xyzw):.15f}",
         f"Maximum nominal bias change: {bg_change:.3e} rad/s",
         f"P finite: {p_is_finite}",
