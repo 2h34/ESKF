@@ -1,0 +1,237 @@
+{
+  "phase": "2.4B-1",
+  "analysis_scope": "只分析保存的 successful Update；卡方阈值仅作标准独立 Gaussian Kalman 假设下的 diagnostic reference，不用于 gating 或调参。",
+  "update_count": 25212,
+  "NIS_reference_thresholds": {
+    "chi2_df3_95": 7.8147279,
+    "chi2_df3_99": 11.3448667,
+    "reference_only": true
+  },
+  "exceedance_counts_and_fractions": {
+    "NIS_gt_chi2_df3_95": {
+      "threshold": 7.8147279,
+      "count": 5631,
+      "fraction": 0.22334602570204665
+    },
+    "NIS_gt_chi2_df3_99": {
+      "threshold": 11.3448667,
+      "count": 4201,
+      "fraction": 0.16662700301443756
+    },
+    "NIS_gt_20": {
+      "threshold": 20.0,
+      "count": 2928,
+      "fraction": 0.11613517372679677
+    },
+    "NIS_gt_50": {
+      "threshold": 50.0,
+      "count": 1761,
+      "fraction": 0.06984769157544027
+    },
+    "NIS_gt_100": {
+      "threshold": 100.0,
+      "count": 1015,
+      "fraction": 0.04025860701253371
+    }
+  },
+  "NIS_statistics": {
+    "mean": 16.26669434270549,
+    "median": 2.3592120613897833,
+    "p90": 26.724463835553305,
+    "p95": 79.75826274058473,
+    "p99": 290.65626692476474,
+    "max": 1549.0116660738613
+  },
+  "residual_statistics": {
+    "mean": 0.0007770274693614914,
+    "median": 0.0004775661463239096,
+    "p90": 0.0015965880660312507,
+    "p95": 0.0027150895783561997,
+    "p99": 0.005109495710355997,
+    "max": 0.010371172086740271
+  },
+  "max_abs_NIS_reconstruction_error": 0.0,
+  "max_abs_whitened_norm_error": 2.2737367544323206e-13,
+  "innovation_off_diagonal_correlation": {
+    "max_abs": 0.00321867071312548,
+    "median_abs": 1.7931969096935791e-06,
+    "pairs": [
+      "rho_xy",
+      "rho_xz",
+      "rho_yz"
+    ]
+  },
+  "normal_vs_high_comparison": {
+    "definition": {
+      "normal": "NIS <= 7.8147279",
+      "high": "NIS > 11.3448667",
+      "middle_excluded": true
+    },
+    "normal": {
+      "count": 19581,
+      "median_residual_norm": 0.00038949772992769976,
+      "median_abs_r_theta": {
+        "x": 0.00017783936863528127,
+        "y": 0.00018201870151059833,
+        "z": 0.00013813519751463898
+      },
+      "median_R": {
+        "x": 1.219114e-07,
+        "y": 7.189261e-08,
+        "z": 7.970787e-08
+      },
+      "median_P_pred_theta": {
+        "x": 8.372875736997706e-09,
+        "y": 3.062842599620903e-09,
+        "z": 4.880008932818724e-09
+      },
+      "median_S_diag": {
+        "x": 1.3027907085802798e-07,
+        "y": 7.493665031941553e-08,
+        "z": 8.458800512885042e-08
+      },
+      "median_abs_standardized_diag": {
+        "x": 0.5024079180850897,
+        "y": 0.6398175163190057,
+        "z": 0.4700628806460329
+      },
+      "median_K_theta": {
+        "x": 0.06421613400196857,
+        "y": 0.04066865730104929,
+        "z": 0.05767289984679872
+      },
+      "median_abs_K_bg": {
+        "x": 0.019648286395303766,
+        "y": 0.025558224875247854,
+        "z": 0.024296626110911147
+      },
+      "median_omega_hat_norm": 0.006029187987656413
+    },
+    "high": {
+      "count": 4201,
+      "median_residual_norm": 0.001862929642430287,
+      "median_abs_r_theta": {
+        "x": 0.0002866414980015117,
+        "y": 0.0008592467968184591,
+        "z": 0.0013714469157807925
+      },
+      "median_R": {
+        "x": 1.056495e-07,
+        "y": 9.165553e-08,
+        "z": 7.500116e-08
+      },
+      "median_P_pred_theta": {
+        "x": 7.82095029447815e-09,
+        "y": 3.5095800499458935e-09,
+        "z": 4.737077539290218e-09
+      },
+      "median_S_diag": {
+        "x": 1.1389200589055908e-07,
+        "y": 9.521639502569717e-08,
+        "z": 7.966058308083377e-08
+      },
+      "median_abs_standardized_diag": {
+        "x": 0.8851881702817989,
+        "y": 2.759135678218038,
+        "z": 4.829390559154075
+      },
+      "median_K_theta": {
+        "x": 0.06839314271161968,
+        "y": 0.03653688006472586,
+        "z": 0.05893292116308075
+      },
+      "median_abs_K_bg": {
+        "x": 0.020967822924256453,
+        "y": 0.02273790470665313,
+        "z": 0.02484294415650125
+      },
+      "median_omega_hat_norm": 0.17063008560894535
+    }
+  },
+  "correlations": {
+    "log1p_NIS_vs_omega_hat_norm": 0.6117845089926237,
+    "log1p_NIS_vs_residual_norm": 0.9041713418338198,
+    "log_NIS_vs_log_residual_norm": 0.9880851859644288,
+    "log_NIS_vs_log_R_geometric_mean": 0.030622024462887098,
+    "log_NIS_vs_log_Ppred_geometric_mean": 0.019201699567163326,
+    "log_NIS_vs_log_S_geometric_mean": 0.03276642421689951,
+    "interpretation": "Pearson correlation is descriptive and does not establish causality.",
+    "log_epsilon": 1e-15
+  },
+  "standardized_diag_note": "standardized_diag uses r_i/sqrt(S_ii) as an axis-wise diagnostic; it is not the Cholesky-whitened physical-axis contribution when S has off-diagonal terms.",
+  "whitened_innovation_note": "Cholesky-whitened coordinates are used only to verify NIS; their components are not interpreted as Body x/y/z contributions.",
+  "FAST_LIO_dependence_note": "FAST-LIO uses IMU data, so prediction and observation are not strictly independent.",
+  "top_NIS": {
+    "imu_index": 19369,
+    "timestamp": 1786181330.9256518,
+    "NIS": 1549.0116660738613
+  },
+  "top_residual": {
+    "imu_index": 16209,
+    "timestamp": 1786181315.1256256,
+    "residual_norm": 0.010371172086740271
+  },
+  "high_NIS_segment_count": 273,
+  "longest_high_NIS_segment": {
+    "segment_id": 125,
+    "start_imu_index": 16069,
+    "end_imu_index": 16275,
+    "start_timestamp": 1786181314.4256248,
+    "end_timestamp": 1786181315.4556334,
+    "frame_count": 207,
+    "max_NIS": 750.2376891539968,
+    "median_NIS": 124.39399326599805,
+    "max_residual_norm": 0.010371172086740271,
+    "median_residual_norm": 0.004188371814485299,
+    "median_R_x": 1.814863e-07,
+    "median_R_y": 1.670517e-07,
+    "median_R_z": 1.309832e-07,
+    "median_P_pred_theta_x": 1.0109931735523631e-08,
+    "median_P_pred_theta_y": 4.871218713142221e-09,
+    "median_P_pred_theta_z": 6.2631871279911745e-09,
+    "median_S_xx": 1.9174318651857455e-07,
+    "median_S_yy": 1.7193022989436985e-07,
+    "median_S_zz": 1.373783933554908e-07,
+    "median_abs_standardized_x": 0.5365692360046201,
+    "median_abs_standardized_y": 4.073388417076799,
+    "median_abs_standardized_z": 9.660883440923763,
+    "median_K_theta_x": 0.05476302100963071,
+    "median_K_theta_y": 0.028396872212710082,
+    "median_K_theta_z": 0.04559108071578364,
+    "median_abs_K_bg_x": 0.01663523819166589,
+    "median_abs_K_bg_y": 0.01666130075442775,
+    "median_abs_K_bg_z": 0.019004591213334296,
+    "median_omega_hat_norm": 0.7326052837763783
+  },
+  "max_NIS_segment": {
+    "segment_id": 199,
+    "start_imu_index": 19249,
+    "end_imu_index": 19411,
+    "start_timestamp": 1786181330.325651,
+    "end_timestamp": 1786181331.135653,
+    "frame_count": 163,
+    "max_NIS": 1549.0116660738613,
+    "median_NIS": 131.0566988314451,
+    "max_residual_norm": 0.009230055556942614,
+    "median_residual_norm": 0.002986777656595974,
+    "median_R_x": 5.788923e-08,
+    "median_R_y": 8.955633e-08,
+    "median_R_z": 5.176423e-08,
+    "median_P_pred_theta_x": 5.673596768766815e-09,
+    "median_P_pred_theta_y": 3.395060357597164e-09,
+    "median_P_pred_theta_z": 3.904523598336559e-09,
+    "median_S_xx": 6.363284998658588e-08,
+    "median_S_yy": 9.292371849286286e-08,
+    "median_S_zz": 5.561467877665252e-08,
+    "median_abs_standardized_x": 1.015684286157571,
+    "median_abs_standardized_y": 5.340138398577988,
+    "median_abs_standardized_z": 9.487539917193349,
+    "median_K_theta_x": 0.09185482424902093,
+    "median_K_theta_y": 0.036681399862977436,
+    "median_K_theta_z": 0.07090009947521783,
+    "median_abs_K_bg_x": 0.02824209522472483,
+    "median_abs_K_bg_y": 0.022777756137953933,
+    "median_abs_K_bg_z": 0.030044765787425324,
+    "median_omega_hat_norm": 0.7634188223195356
+  }
+}

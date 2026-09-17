@@ -60,6 +60,12 @@ DEBUG_FIELDNAMES = (
     "P_bg_z",
     "P_min_eigenvalue",
     "P_symmetry_error",
+    "P_pred_theta_x",
+    "P_pred_theta_y",
+    "P_pred_theta_z",
+    "P_pred_bg_x",
+    "P_pred_bg_y",
+    "P_pred_bg_z",
     "r_theta_x",
     "r_theta_y",
     "r_theta_z",
@@ -67,6 +73,12 @@ DEBUG_FIELDNAMES = (
     "R_x",
     "R_y",
     "R_z",
+    "S_xx",
+    "S_yy",
+    "S_zz",
+    "S_xy",
+    "S_xz",
+    "S_yz",
     "NIS",
     "delta_theta_x",
     "delta_theta_y",
@@ -219,17 +231,23 @@ def _debug_row(
     missing = float("nan")
     omega_hat = prediction.omega_hat_rad_s if prediction is not None else None
     covariance_diagonal = np.diag(state.P)
+    predicted_covariance_diagonal = (
+        prediction.P_diag_after if prediction is not None else None
+    )
 
     if update is None:
         residual = delta_theta = delta_bg = None
         R_diagonal = None
+        S = None
         K_theta = K_bg = None
         residual_norm = NIS = missing
     else:
+        predicted_covariance_diagonal = update.P_diag_before
         residual = update.r_theta_rad
         delta_theta = update.delta_theta_rad
         delta_bg = update.delta_bg_rad_s
         R_diagonal = np.diag(update.R_attitude)
+        S = update.S
         K_theta = np.diag(update.K[0:3, :])
         K_bg = np.array(
             [update.K[3, 0], update.K[4, 1], update.K[5, 2]], dtype=float
@@ -260,6 +278,12 @@ def _debug_row(
         "P_bg_z": float(covariance_diagonal[5]),
         "P_min_eigenvalue": minimum_eigenvalue,
         "P_symmetry_error": symmetry_error,
+        "P_pred_theta_x": component(predicted_covariance_diagonal, 0),
+        "P_pred_theta_y": component(predicted_covariance_diagonal, 1),
+        "P_pred_theta_z": component(predicted_covariance_diagonal, 2),
+        "P_pred_bg_x": component(predicted_covariance_diagonal, 3),
+        "P_pred_bg_y": component(predicted_covariance_diagonal, 4),
+        "P_pred_bg_z": component(predicted_covariance_diagonal, 5),
         "r_theta_x": component(residual, 0),
         "r_theta_y": component(residual, 1),
         "r_theta_z": component(residual, 2),
@@ -267,6 +291,12 @@ def _debug_row(
         "R_x": component(R_diagonal, 0),
         "R_y": component(R_diagonal, 1),
         "R_z": component(R_diagonal, 2),
+        "S_xx": missing if S is None else float(S[0, 0]),
+        "S_yy": missing if S is None else float(S[1, 1]),
+        "S_zz": missing if S is None else float(S[2, 2]),
+        "S_xy": missing if S is None else float(S[0, 1]),
+        "S_xz": missing if S is None else float(S[0, 2]),
+        "S_yz": missing if S is None else float(S[1, 2]),
         "NIS": NIS,
         "delta_theta_x": component(delta_theta, 0),
         "delta_theta_y": component(delta_theta, 1),
@@ -281,6 +311,32 @@ def _debug_row(
         "K_bg_y": component(K_bg, 1),
         "K_bg_z": component(K_bg, 2),
     }
+
+
+def _validate_prediction_update_boundary(
+    prediction: PredictionDebug,
+    update: UpdateDebug,
+    config: ProjectConfig,
+    imu_index: int,
+) -> None:
+    """Confirm both debug objects describe the same pre-update covariance."""
+
+    prediction_diagonal = np.asarray(prediction.P_diag_after, dtype=float)
+    update_diagonal = np.asarray(update.P_diag_before, dtype=float)
+    tolerance = config.numerical.covariance_symmetry_tolerance
+    if not np.allclose(
+        prediction_diagonal,
+        update_diagonal,
+        rtol=1e-12,
+        atol=tolerance,
+    ):
+        maximum_difference = float(
+            np.max(np.abs(prediction_diagonal - update_diagonal))
+        )
+        raise RuntimeError(
+            "prediction/update P^- diagonal mismatch at IMU index "
+            f"{imu_index}: max difference {maximum_difference:.3e}"
+        )
 
 
 def _statistics(values: Sequence[float]) -> dict[str, float | None]:
@@ -375,6 +431,9 @@ def run_eskf6d(
                 update = eskf.update_attitude(
                     pose.quaternion_xyzw[pose_index],
                     np.diag(attitude_covariance),
+                )
+                _validate_prediction_update_boundary(
+                    prediction, update, config, current_k
                 )
                 skip_reason = ""
                 residual_norms.append(update.residual_norm)

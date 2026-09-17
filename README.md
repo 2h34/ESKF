@@ -275,7 +275,13 @@ Runner 对每个最终 `P` 执行对称性和 PSD 检查；仅允许 `covariance
 
 完整运行成功只说明当前 6D ESKF 的调度、闭环计算和诊断输出能够从 `k0` 稳定执行到数据末尾。它不证明 `Q/R/P0` 或其他参数合理；参数合理性必须留到下一阶段结合 `P`、innovation、NIS、Kalman gain、bias 与最终姿态结果进行人工分析。
 
-## 13. 运行方式
+## 13. Phase 2.4B-1：NIS / Innovation 诊断分析
+
+[scripts/analyze_eskf6d.py](scripts/analyze_eskf6d.py) 只读取已保存的 result、debug 和 summary，不重新运行滤波。它定位 high-NIS 的时间、连续片段、轴向 residual 和 covariance 相关量，并输出 `results/analysis/` 下的 JSON/CSV 证据。
+
+`chi-square(df=3)` 阈值只是在标准独立 Gaussian Kalman 假设下的诊断参考。FAST-LIO 本身使用 IMU，Prediction 与 Observation 并不严格独立。本阶段不做 NIS gating、observation rejection 或 tuning，不修改 ESKF 数学、`Q/R/P0` 或正式 result 输出，也不根据相关性自动生成参数结论。
+
+## 14. 运行方式
 
 使用安装了 NumPy 的 Python 环境：
 
@@ -285,11 +291,12 @@ python scripts/check_initialization.py
 python scripts/check_prediction.py
 python scripts/check_update.py
 python scripts/run_eskf6d.py
+python scripts/analyze_eskf6d.py
 python -m unittest discover -s tests -v
 ```
 
 `check_initialization.py` 只输出初始化量；`check_prediction.py` 只检查第一个真实 Prediction 和后续 20 步 Prediction-only 短序列；`check_update.py` 只检查第一组真实 Prediction + Update。它们都不是正式滤波入口。`run_eskf6d.py` 是本阶段完整运行和正式结果输出入口，但不包含绘图或调参。
 
-## 14. 开发期测试与最终提交整理
+## 15. 开发期测试与最终提交整理
 
 `tests/`、`scripts/check_pose_convention.py`、`scripts/check_initialization.py`、`scripts/check_prediction.py` 和 `scripts/check_update.py` 都属于开发期验证资产，与正式算法模块隔离。当前保留这些文件用于人工审核和回归检查；项目完成后将单独执行 submission cleanup，只保留题目要求和程序正常运行所需的正式代码。
