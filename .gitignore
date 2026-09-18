@@ -1,2 +1,8 @@
 __pycache__/
 *.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.tmp
+.DS_Store
+Thumbs.db

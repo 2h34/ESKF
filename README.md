@@ -33,7 +33,7 @@ delta_x = [delta_theta, delta_b_g]
 | timestamp 与 `dt` | ✓ |
 | 静止段 gyro bias 初始化 | ✓ |
 | 四元数姿态 Prediction | ✓ |
-| `P/Q` 协方差 Prediction | ✓ |
+| `P` Prediction / `Q` Design 与离散化 | ✓ |
 | FAST-LIO quaternion Observation | ✓ |
 | `R = diag(cov_33, cov_44, cov_55)` | ✓ |
 | IMU / FAST-LIO timestamp alignment | ✓ |
@@ -61,6 +61,8 @@ delta_x = [delta_theta, delta_b_g]
 - `R_WB`：Body Frame 到 World Frame，`v_W = R_WB @ v_B`；
 - 右乘误差：`R_true = R_hat Exp(delta_theta^)`。
 
+下文用 `Delta_theta_imu` 表示一个采样区间内由 IMU 积分得到的名义旋转增量；`delta_theta` 专指 6D ESKF 中的姿态误差状态，二者不是同一个量。
+
 ### 3.2 Prediction Model
 
 先从测得角速度中扣除当前零偏：
@@ -72,8 +74,8 @@ omega_hat = omega_m - b_g_hat
 正式实现使用 left-endpoint Zero-Order Hold（ZOH），即用当前 IMU 帧的角速度代表当前采样区间内的角速度：
 
 ```text
-delta_theta = omega_hat * dt
-q_new = normalize(q_old ⊗ Exp(delta_theta))
+Delta_theta_imu = omega_hat * dt
+q_new = normalize(q_old ⊗ Exp(Delta_theta_imu))
 b_g_new = b_g_old
 ```
 
@@ -277,7 +279,7 @@ FAST-LIO 本身是 LiDAR-inertial estimator，使用了 IMU 信息，因此它�
 正式 Prediction 使用：
 
 ```text
-delta_theta = omega[k] * dt
+Delta_theta_imu = omega_hat[k] * dt[k+1]
 ```
 
 离线实验比较了 left endpoint 与相邻 gyro 平均值的 trapezoid 近似。梯形近似明显改善了多数典型动态 interval 的单步姿态增量一致性，因此 left-endpoint ZOH 是已确认的一个动态误差贡献因素；但 high-NIS 的 p95/max 尾部仍然存在，所以它不是唯一根因。
