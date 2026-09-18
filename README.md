@@ -44,6 +44,56 @@ delta_x = [delta_theta, delta_b_g]
 | 一组完整实验结果 | ✓ |
 | 15D 位置估计 | 选做，未实现 |
 
+## 2.1 代码结构与模块职责
+
+项目采用“数据处理 → 数学模块 → 外部调度 → 结果展示”的单向分层。`ESKF6D` 只维护姿态、陀螺零偏和误差状态协方差，不保存 IMU index、timestamp 或 pose index；这些时间与观测调度信息由 runner 负责。
+
+主数据流如下：
+
+```text
+data/raw/*.csv
+    ↓  scripts/run_preprocess.py
+preprocess.py + alignment.py
+    ↓
+data/processed/*.npz
+    ↓  scripts/run_eskf6d.py
+initialization.py → ESKF6D + runner6d.py
+    ↓
+results/eskf6d_result.csv + eskf6d_debug.csv + eskf6d_summary.json
+    ↓  scripts/plot_eskf6d_results.py
+plot_result.py
+    ↓
+results/rpy_result.csv + results/figures/*.png
+```
+
+核心文件职责：
+
+| 文件 | 所属层 | 主要职责 | 不负责的内容 |
+| --- | --- | --- | --- |
+| `config.py` | 配置 | 坐标 convention、预处理阈值、滤波噪声参数和 numerical safety | 数据统计和运行时状态 |
+| `data_types.py` | 数据结构 | processed data、alignment 和诊断结果的 dataclass | 数据读取和滤波计算 |
+| `preprocess.py` | 数据处理 | 原始 CSV 校验、单位转换、`dt` 和初始静止段统计 | IMU/pose 匹配和 ESKF |
+| `alignment.py` | 数据处理 | 基于 timestamp 的单调一对一 IMU/FAST-LIO 匹配 | 插值、滤波 Update 和重新匹配 |
+| `processed_io.py` | 数据边界 | 校验并加载 `data/processed/*.npz` | 修改 measurement、timestamp 或 covariance |
+| `rotation_utils.py` | 数学基础 | xyzw Quaternion、SO(3) Exp/Log、旋转矩阵和 ZYX RPY | ESKF 状态与时间调度 |
+| `initialization.py` | 滤波初始化 | 在 `k0` 构造 `q0`、`bg0`、`P0` 和 `Qc` | Prediction、Observation Update 和循环调度 |
+| `eskf6d.py` | 滤波数学 | 6D Prediction、Observation Update、Injection 和 Reset | index、timestamp、pose matching 和文件输出 |
+| `runner6d.py` | 外部调度 | 按 IMU 时间推进、选择匹配 observation、记录 posterior/debug/summary | 重新定义 ESKF 数学或重新匹配 timestamp |
+| `plot_result.py` | 结果展示 | 从冻结结果生成 RPY 数据、统计和图片 | 重新运行或修改滤波结果 |
+
+程序入口与开发资产的边界：
+
+| 路径 | 用途 |
+| --- | --- |
+| `scripts/run_preprocess.py` | 正式预处理入口 |
+| `scripts/run_eskf6d.py` | 完整 6D ESKF 正式运行入口 |
+| `scripts/plot_eskf6d_results.py` | 正式结果整理和绘图入口 |
+| `scripts/check_*.py` | 单步和边界条件开发验证，不进入正式运行流程 |
+| `scripts/analyze_*.py` | 读取已保存结果进行离线诊断，不修改滤波输出 |
+| `tests/` | 自动化回归测试，不包含正式算法实现 |
+
+推荐阅读顺序为：`config.py` / `data_types.py` → `rotation_utils.py` → `preprocess.py` / `alignment.py` → `initialization.py` → `eskf6d.py` → `runner6d.py` → 三个正式入口脚本。
+
 ## 3. 核心算法
 
 ### 3.1 State
