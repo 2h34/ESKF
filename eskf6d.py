@@ -196,8 +196,9 @@ class ESKF6D:
         q_before = self._q_xyzw.copy()
         P_before = self._P.copy()
 
-        # 陀螺仪读数同时含有真实角速度和当前估计的零偏；先减去名义零偏，
-        # 得到用于传播名义姿态的 Body-frame 角速度估计。
+        # 陀螺仪测量可看作真实角速度 + 实际零偏 + 测量噪声。滤波器不知道
+        # 实际零偏，只能减去当前名义状态中的零偏估计 b_g_hat，得到用于
+        # 姿态传播的 Body-frame 角速度估计 omega_hat。
         omega_hat = gyro - self._bg_rad_s
 
         # 注意：这里沿用已有变量名 delta_theta，但它表示本次 IMU 区间的
@@ -225,8 +226,11 @@ class ESKF6D:
         Gc[0:3, 0:3] = -np.eye(3, dtype=float)
         Gc[3:6, 3:6] = np.eye(3, dtype=float)
 
-        # 当前版本用一阶近似 Phi ≈ I + Fc*dt 离散化状态转移；Qc 是连续
-        # 时间噪声强度，Qd 是该采样区间内累积得到的离散过程噪声协方差。
+        # 当前版本采用一阶离散近似，而不是任意 dt 下的精确离散公式：
+        # Phi ≈ I + Fc * dt
+        # Qd  ≈ Gc @ Qc @ Gc.T * dt
+        # Qc 描述连续时间过程噪声强度；Qd 是在当前一阶近似下得到的、
+        # 本采样区间对应的离散过程噪声协方差。
         Phi = np.eye(6, dtype=float) + Fc * dt
         Qd = Gc @ self._Qc @ Gc.T * dt
 

@@ -151,8 +151,10 @@ def quaternion_to_rotation_matrix(quaternion_xyzw: ArrayLike) -> FloatArray:
 def quaternion_to_rpy(quaternion_xyzw: ArrayLike) -> FloatArray:
     """Return ``[roll, pitch, yaw]`` in radians using ZYX yaw-pitch-roll.
 
-    RPY 采用 ZYX（先 yaw、再 pitch、再 roll）的可读输出约定，只用于结果
-    表达与检查；滤波内部始终用四元数，不用存在奇异性的欧拉角传播状态。
+    RPY 使用 ZYX yaw-pitch-roll 约定，即按
+    ``R = Rz(yaw) @ Ry(pitch) @ Rx(roll)`` 对当前旋转矩阵进行分解。
+    它主要用于结果展示和人工理解；ESKF 内部姿态传播始终使用四元数，
+    而不是欧拉角。
     """
 
     rotation = quaternion_to_rotation_matrix(quaternion_xyzw)
