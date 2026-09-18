@@ -26,7 +26,11 @@ def _vector(value: ArrayLike, size: int, name: str) -> FloatArray:
 
 
 def hat(vector: ArrayLike) -> FloatArray:
-    """Return the 3x3 skew matrix satisfying ``hat(a) @ b == cross(a, b)``."""
+    """Return the 3x3 skew matrix satisfying ``hat(a) @ b == cross(a, b)``.
+
+    ``hat`` 把三维向量映射为李代数 so(3) 的反对称矩阵，使叉乘能够写成
+    矩阵乘法；ESKF 的姿态误差动力学和 reset Jacobian 都使用这一表示。
+    """
 
     x, y, z = _vector(vector, 3, "vector")
     return np.array([[0.0, -z, y], [z, 0.0, -x], [-y, x, 0.0]], dtype=float)
@@ -36,7 +40,11 @@ def normalize_quaternion(
     quaternion_xyzw: ArrayLike,
     numerical: NumericalSafetyConfig = DEFAULT_CONFIG.numerical,
 ) -> FloatArray:
-    """Normalize one finite quaternion with storage order ``[x, y, z, w]``."""
+    """Normalize one finite quaternion with storage order ``[x, y, z, w]``.
+
+    单位四元数才表示纯旋转；归一化用于清除浮点累计误差，而近零四元数没有
+    可恢复的旋转含义，因此必须明确拒绝，不能静默归一化。
+    """
 
     q = _vector(quaternion_xyzw, 4, "quaternion_xyzw")
     norm = float(np.linalg.norm(q))
@@ -47,7 +55,11 @@ def normalize_quaternion(
 
 
 def quaternion_multiply(q1_xyzw: ArrayLike, q2_xyzw: ArrayLike) -> FloatArray:
-    """Return Hamilton product ``q1 tensor-product q2`` in xyzw order."""
+    """Return Hamilton product ``q1 tensor-product q2`` in xyzw order.
+
+    代码存储顺序是 ``xyzw``，但乘法仍是标准 Hamilton product；乘数顺序
+    表示旋转复合顺序，不能因为更换存储布局而交换。
+    """
 
     q1 = _vector(q1_xyzw, 4, "q1_xyzw")
     q2 = _vector(q2_xyzw, 4, "q2_xyzw")
@@ -62,7 +74,11 @@ def quaternion_inverse(
     quaternion_xyzw: ArrayLike,
     numerical: NumericalSafetyConfig = DEFAULT_CONFIG.numerical,
 ) -> FloatArray:
-    """Return the multiplicative inverse of a finite xyzw quaternion."""
+    """Return the multiplicative inverse of a finite xyzw quaternion.
+
+    对单位四元数它等于共轭；这里仍除以范数平方，使函数对有限的非单位输入
+    保持真正的乘法逆，并对近零输入报错。
+    """
 
     q = _vector(quaternion_xyzw, 4, "quaternion_xyzw")
     norm_sq = float(np.dot(q, q))
@@ -76,7 +92,11 @@ def rotvec_to_quaternion(
     rotation_vector_rad: ArrayLike,
     numerical: NumericalSafetyConfig = DEFAULT_CONFIG.numerical,
 ) -> FloatArray:
-    """Convert a rotation vector in radians, shape ``(3,)``, to xyzw."""
+    """Convert a rotation vector in radians, shape ``(3,)``, to xyzw.
+
+    rotation vector 的方向是旋转轴，模长是旋转角；该函数是 SO(3) 指数映射
+    的四元数实现，小角度分支用级数避免 ``sin(theta/2)/theta`` 数值不稳。
+    """
 
     phi = _vector(rotation_vector_rad, 3, "rotation_vector_rad")
     theta = float(np.linalg.norm(phi))
@@ -96,7 +116,11 @@ def quaternion_to_rotvec(
     quaternion_xyzw: ArrayLike,
     numerical: NumericalSafetyConfig = DEFAULT_CONFIG.numerical,
 ) -> FloatArray:
-    """Convert an xyzw quaternion to the shortest rotation vector in radians."""
+    """Convert an xyzw quaternion to the shortest rotation vector in radians.
+
+    这是 SO(3) 对数映射的工程实现。先选择标量部非负的等价四元数，以返回
+    最短旋转；小角度时用 ``rotvec ≈ 2*q_xyz`` 避免除以极小量。
+    """
 
     q = normalize_quaternion(quaternion_xyzw, numerical)
     if q[3] < 0.0:
@@ -125,7 +149,11 @@ def quaternion_to_rotation_matrix(quaternion_xyzw: ArrayLike) -> FloatArray:
 
 
 def quaternion_to_rpy(quaternion_xyzw: ArrayLike) -> FloatArray:
-    """Return ``[roll, pitch, yaw]`` in radians using ZYX yaw-pitch-roll."""
+    """Return ``[roll, pitch, yaw]`` in radians using ZYX yaw-pitch-roll.
+
+    RPY 采用 ZYX（先 yaw、再 pitch、再 roll）的可读输出约定，只用于结果
+    表达与检查；滤波内部始终用四元数，不用存在奇异性的欧拉角传播状态。
+    """
 
     rotation = quaternion_to_rotation_matrix(quaternion_xyzw)
     pitch_argument = float(np.clip(-rotation[2, 0], -1.0, 1.0))

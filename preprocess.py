@@ -91,7 +91,11 @@ def load_imu_csv(
     path: str | Path,
     config: ProjectConfig = DEFAULT_CONFIG,
 ) -> tuple[ProcessedIMUData, IMUDiagnostics]:
-    """Load IMU CSV by column name and convert accelerometer g to m/s^2."""
+    """Load IMU CSV by column name and convert accelerometer g to m/s^2.
+
+    原始 CSV 还没有统一单位、严格时间轴和有效性保证，不能直接送入滤波器；
+    本函数建立这些输入边界，同时保留原始 gyro，绝不在预处理阶段永久减去 bg。
+    """
 
     values, invalid_rows, raw_count = _read_numeric_csv(
         path, IMU_COLUMNS, config.preprocess.invalid_sample_policy
@@ -110,6 +114,7 @@ def load_imu_csv(
         timestamp=timestamp,
         dt=dt,
         gyro_rad_s=values[:, [4, 5, 6]],
+        # 原始加速度列以 g 为单位，统一换算成 SI 制 m/s^2；陀螺已是 rad/s。
         acc_mps2=values[:, [1, 2, 3]] * GRAVITY_MPS2,
     )
     diagnostics = IMUDiagnostics(
@@ -138,7 +143,11 @@ def load_pose_csv(
     path: str | Path,
     config: ProjectConfig = DEFAULT_CONFIG,
 ) -> tuple[ProcessedPoseData, PoseDiagnostics]:
-    """Load FAST-LIO pose/covariance CSV, validate, and normalize xyzw quaternions."""
+    """Load FAST-LIO pose/covariance CSV, validate, and normalize xyzw quaternions.
+
+    FAST-LIO 行号与 IMU 行号没有物理对应关系；这里只清洗各自时间序列，真正
+    的跨传感器关联由 alignment 按 timestamp 完成。
+    """
 
     values, invalid_rows, raw_count = _read_numeric_csv(
         path, POSE_COLUMNS, config.preprocess.invalid_sample_policy

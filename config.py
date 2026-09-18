@@ -22,7 +22,11 @@ GRAVITY_WORLD_MPS2 = np.array([0.0, 0.0, -GRAVITY_MPS2], dtype=float)
 
 @dataclass(frozen=True)
 class NumericalSafetyConfig:
-    """Numerical guards; these are not ESKF tuning parameters."""
+    """Numerical guards; these are not ESKF tuning parameters.
+
+    这些量只规定何时把近零四元数、明显负协方差或显著非对称矩阵判为数值
+    错误，不能用来改变滤波器对物理噪声和观测可信度的判断。
+    """
 
     quaternion_norm_epsilon: float = 1e-12
     minimum_valid_quaternion_norm: float = 1e-8
@@ -68,6 +72,9 @@ class FilterNoiseConfig:
     ``gyro_bias_random_walk_density`` is the amplitude of the white driving
     noise in the later continuous gyro-bias random-walk model. The default is
     an engineering starting value, not a calibration result from this dataset.
+
+    它描述“零偏随时间漂移得多快”，不是当前零偏 ``b_g`` 的数值，也不是
+    静止段陀螺测量标准差；后两者分别属于名义状态估计和测量噪声统计。
     """
 
     gyro_bias_random_walk_density: float = 1e-4

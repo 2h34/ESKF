@@ -366,6 +366,14 @@ def run_eskf6d(
 
     The initialization pose at ``k0`` has already contributed to ``q0/P0`` and
     is therefore logged but never passed to ``update_attitude`` again.
+
+    调度顺序固定为：记录 k0 初始化后验；对每个 k 用 ``gyro[k]`` 与
+    ``dt[k+1]`` 传播到 k+1；查询 k+1 的预处理匹配；可选更新；最后按
+    ``imu.timestamp[k+1]`` 记录该帧后验。滤波数学本身不维护这些索引和时间。
+
+    ``state[k] -> gyro[k] + dt[k+1] -> Prediction[k+1]``
+    ``-> pose_index_for_imu[k+1] -> optional Update``
+    ``-> posterior at imu.timestamp[k+1]``
     """
 
     k0 = _validate_runner_inputs(
@@ -382,6 +390,8 @@ def run_eskf6d(
     initial_min_eigenvalue, initial_symmetry_error = _covariance_metrics(
         initial_state, config, k0
     )
+    # k0 的 FAST-LIO 姿态已经用于构造 q0/P0；这里只记录一次初始化后验，
+    # update_applied=False 可防止同一观测在初始化和正式循环中被重复使用。
     result_rows.append(
         _result_row(
             imu_index=k0,
@@ -410,12 +420,19 @@ def run_eskf6d(
 
     for k in range(k0, sample_count - 1):
         current_k = k + 1
+
+        # 左端点 ZOH：gyro[k] 代表区间 [t_k, t_{k+1}] 的输入，而 dt[k+1]
+        # 定义的正是 t_{k+1}-t_k，因此二者共同把 state[k] 传播到 state[k+1]。
         prediction = eskf.predict(imu.gyro_rad_s[k], float(imu.dt[current_k]))
+
+        # pose 对齐只服从 preprocessing 已生成的 match table；不在 runner 内
+        # 重新做 nearest matching，也不通过累计 dt 猜测当前 timestamp。
         pose_index = int(alignment.pose_index_for_imu[current_k])
         has_pose_match = pose_index >= 0
         update: UpdateDebug | None = None
 
         if not has_pose_match:
+            # -1 明确表示本帧没有可用姿态观测，Prediction 后验直接成为本帧结果。
             skip_reason = "unmatched_pose"
         else:
             attitude_covariance = np.asarray(
@@ -426,6 +443,8 @@ def run_eskf6d(
                     f"attitude covariance is non-finite at pose index {pose_index}"
                 )
             if np.any(attitude_covariance <= 0.0):
+                # 非正观测协方差由 scheduler 跳过，不构造伪造的 epsilon R；
+                # 该帧仍保留已经完成的 Prediction 状态。
                 skip_reason = "nonpositive_attitude_covariance"
             else:
                 update = eskf.update_attitude(
@@ -445,6 +464,8 @@ def run_eskf6d(
         )
         timestamp = float(imu.timestamp[current_k])
         update_applied = update is not None
+        # result.csv 保存每个 IMU 时刻最终的 posterior state；debug.csv 只保存
+        # 传播、更新和数值安全诊断，不能把缺少观测的 NaN 误当作零残差。
         result_rows.append(
             _result_row(
                 imu_index=current_k,

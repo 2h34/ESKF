@@ -73,7 +73,11 @@ def initialize_eskf6d(
     alignment: AlignmentResult,
     config: ProjectConfig = DEFAULT_CONFIG,
 ) -> ESKF6DInitialization:
-    """Construct ``q0``, ``bg0``, ``P0``, and ``Qc`` at the frozen index ``k0``."""
+    """Construct ``q0``, ``bg0``, ``P0``, and ``Qc`` at the frozen index ``k0``.
+
+    误差态均值初始化为零，只表示名义状态当前没有待注入的修正；它不代表
+    状态完全确定。因此 ``P0`` 必须保留初始姿态和零偏估计的不确定性。
+    """
 
     imu_timestamp = np.asarray(imu.timestamp, dtype=float)
     if imu_timestamp.ndim != 1 or imu_timestamp.size == 0:
@@ -89,6 +93,9 @@ def initialize_eskf6d(
         raise ValueError("initialization requires an accepted static interval")
 
     static_sample_count = static_end - static_start
+
+    # static_end_idx 采用 Python 切片的右开边界，因此 k0=static_end-1 才是
+    # 已确认静止区间内最后一个 IMU 样本，也是正式传播开始前的名义状态时刻。
     imu_index = static_end - 1
     timestamp = float(imu_timestamp[imu_index])
     if not np.isclose(
@@ -118,7 +125,11 @@ def initialize_eskf6d(
     if pose_index >= pose_quaternion.shape[0]:
         raise ValueError(f"matched pose index {pose_index} is out of range")
 
+    # 初始名义姿态直接取 k0 时刻已匹配的 FAST-LIO q_WB；后续 runner 不会
+    # 再把同一条观测重复送入 update_attitude。
     q0 = normalize_quaternion(pose_quaternion[pose_index], config.numerical)
+
+    # 静止时真实角速度近似为零，所以静止段陀螺均值可作为初始零偏估计。
     bg0 = _finite_vector(init_stats.gyro_mean, "init_stats.gyro_mean")
     gyro_static_std = _finite_vector(
         init_stats.gyro_std, "init_stats.gyro_std"
@@ -136,15 +147,20 @@ def initialize_eskf6d(
             "initialization pose attitude covariance must be strictly positive"
         )
 
+    # P0 前三维是初始姿态误差协方差，后三维是静止均值作为零偏估计时的
+    # 均值不确定性。误差态均值为零并不意味着这些协方差也应为零。
     bias_covariance = gyro_static_std**2 / static_sample_count
     P0 = np.diag(np.concatenate((attitude_covariance, bias_covariance)))
 
     median_dt = float(init_stats.median_dt)
     if not np.isfinite(median_dt) or median_dt <= 0.0:
         raise ValueError("init_stats.median_dt must be finite and positive")
+    # 静止段角速度标准差用于估计陀螺测量白噪声密度；它描述单次测量噪声，
+    # 与下方描述零偏随时间缓慢漂移强度的 bias random walk density 不是一回事。
     gyro_noise_density = gyro_static_std * np.sqrt(median_dt)
     gyro_measurement_noise = gyro_noise_density**2
 
+    # 零偏随机游走密度来自显式工程配置，并非用本段静止 gyro std 冒充得到。
     bias_random_walk_density = float(
         config.filter_noise.gyro_bias_random_walk_density
     )

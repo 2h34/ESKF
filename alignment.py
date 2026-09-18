@@ -27,7 +27,11 @@ def compute_alignment_tolerance(
     pose_timestamp: ArrayLike,
     config: AlignmentConfig = DEFAULT_CONFIG.alignment,
 ) -> float:
-    """Derive tolerance from measured median periods unless overridden."""
+    """Derive tolerance from measured median periods unless overridden.
+
+    tolerance 表示两个传感器时间戳仍可视为同一时刻的最大误差；默认从实际
+    采样周期推导，也允许配置显式秒数，避免把 CSV 行号当成时间对齐依据。
+    """
 
     imu_time = _timestamps(imu_timestamp, "imu_timestamp")
     pose_time = _timestamps(pose_timestamp, "pose_timestamp")
@@ -52,6 +56,9 @@ def align_timestamps(
     For each IMU sample, only the first two not-yet-consumed pose timestamps can
     be candidates. Selecting the second permanently skips the first, which is
     required to keep the association ordered and one-to-one.
+
+    输出中的 ``-1`` 表示该 IMU 帧没有可用 observation，runner 应继续纯
+    Prediction；pose cursor 只向前移动，保证同一条 FAST-LIO pose 不会复用。
     """
 
     imu_time = _timestamps(imu_timestamp, "imu_timestamp")
