@@ -1,0 +1,469 @@
+{
+  "phase": "3.8",
+  "output_frames": 25219,
+  "update_count": 25212,
+  "excluded_nonupdate_count": 7,
+  "duration_s": 126.09473514556885,
+  "statistics": {
+    "NIS": {
+      "mean": 23.834862064431956,
+      "median": 5.531808394552495,
+      "p95": 113.08484290973445,
+      "max": 1573.1855125598508
+    },
+    "position_residual_norm": {
+      "mean": 0.0025310941856688963,
+      "median": 0.0019281032249675533,
+      "p95": 0.006694129388886039,
+      "max": 0.018939638186080222
+    },
+    "attitude_residual_norm": {
+      "mean": 0.0007770447704157736,
+      "median": 0.00047756220427401226,
+      "p95": 0.0027184381920194183,
+      "max": 0.010366175930261732
+    }
+  },
+  "source_summary_statistics_match": true,
+  "saved_state_checks": {
+    "delta_p_max_recurrence_error": 4.440621047957505e-16,
+    "delta_v_max_recurrence_error": 5.551115123125783e-17
+  },
+  "maxima": {
+    "NIS": {
+      "imu_index": 19369,
+      "time_s": 94.8703761100769,
+      "NIS": 1573.1855125598508,
+      "position_residual_norm": 0.00549305141512864,
+      "attitude_residual_norm": 0.009233090419912948,
+      "speed_mps": 0.875212910024688,
+      "omega_norm_rad_s": 0.08731959305144286,
+      "acc_norm_mps2": 0.34895314699724267,
+      "position_step_speed_mps": 0.9003272528225622,
+      "acc_change_rate_mps3": 82.47962726262409,
+      "dt_s": 0.0058019161224365234
+    },
+    "position_residual_norm": {
+      "imu_index": 14789,
+      "time_s": 71.97042989730835,
+      "NIS": 184.51217855465208,
+      "position_residual_norm": 0.018939638186080222,
+      "attitude_residual_norm": 0.001514562208823881,
+      "speed_mps": 0.8044572210776212,
+      "omega_norm_rad_s": 0.0365333880628931,
+      "acc_norm_mps2": 0.8159265533171417,
+      "position_step_speed_mps": 0.8992058649374414,
+      "acc_change_rate_mps3": 145.40871938415972,
+      "dt_s": 0.005846261978149414
+    },
+    "attitude_residual_norm": {
+      "imu_index": 16209,
+      "time_s": 79.07034993171692,
+      "NIS": 787.0458843823499,
+      "position_residual_norm": 0.009465012519468508,
+      "attitude_residual_norm": 0.010366175930261732,
+      "speed_mps": 0.05313399329042867,
+      "omega_norm_rad_s": 0.11457809118766067,
+      "acc_norm_mps2": 1.7652855834799313,
+      "position_step_speed_mps": 0.023612581652797917,
+      "acc_change_rate_mps3": 942.5763777411884,
+      "dt_s": 0.005747318267822266
+    }
+  },
+  "high_NIS_selection": {
+    "rule": "NIS > empirical p95 of valid updates; offline only, no gating",
+    "threshold": 113.08484290973445,
+    "frame_count": 1261,
+    "segment_count": 109,
+    "ten_second_bins": [
+      {
+        "start_s": 0.0,
+        "end_s": 10.0,
+        "updates": 1999,
+        "high_count": 0
+      },
+      {
+        "start_s": 10.0,
+        "end_s": 20.0,
+        "updates": 2000,
+        "high_count": 0
+      },
+      {
+        "start_s": 20.0,
+        "end_s": 30.0,
+        "updates": 2000,
+        "high_count": 0
+      },
+      {
+        "start_s": 30.0,
+        "end_s": 40.0,
+        "updates": 2000,
+        "high_count": 0
+      },
+      {
+        "start_s": 40.0,
+        "end_s": 50.0,
+        "updates": 2000,
+        "high_count": 0
+      },
+      {
+        "start_s": 50.0,
+        "end_s": 60.0,
+        "updates": 2000,
+        "high_count": 0
+      },
+      {
+        "start_s": 60.0,
+        "end_s": 70.0,
+        "updates": 2000,
+        "high_count": 70
+      },
+      {
+        "start_s": 70.0,
+        "end_s": 80.0,
+        "updates": 2000,
+        "high_count": 386
+      },
+      {
+        "start_s": 80.0,
+        "end_s": 90.0,
+        "updates": 2000,
+        "high_count": 386
+      },
+      {
+        "start_s": 90.0,
+        "end_s": 100.0,
+        "updates": 2000,
+        "high_count": 247
+      },
+      {
+        "start_s": 100.0,
+        "end_s": 110.0,
+        "updates": 2000,
+        "high_count": 172
+      },
+      {
+        "start_s": 110.0,
+        "end_s": 120.0,
+        "updates": 2000,
+        "high_count": 0
+      },
+      {
+        "start_s": 120.0,
+        "end_s": 126.09473514556885,
+        "updates": 1213,
+        "high_count": 0
+      }
+    ]
+  },
+  "representative_segments": [
+    {
+      "start_index": 14449,
+      "end_index": 14512,
+      "start_time_s": 70.27033710479736,
+      "end_time_s": 70.58469295501709,
+      "duration_s": 0.31435585021972656,
+      "frame_count": 64,
+      "max_NIS": 888.5522685666588,
+      "position_residual_norm_range": [
+        0.005646158811910481,
+        0.010374317086431389
+      ],
+      "attitude_residual_norm_range": [
+        0.0033887897651718227,
+        0.009746312469744549
+      ]
+    },
+    {
+      "start_index": 14709,
+      "end_index": 14767,
+      "start_time_s": 71.57037448883057,
+      "end_time_s": 71.86037492752075,
+      "duration_s": 0.29000043869018555,
+      "frame_count": 59,
+      "max_NIS": 554.4917863620444,
+      "position_residual_norm_range": [
+        0.00666669273622283,
+        0.015257193209912862
+      ],
+      "attitude_residual_norm_range": [
+        0.0024628559985016064,
+        0.008690919741227062
+      ]
+    },
+    {
+      "start_index": 16189,
+      "end_index": 16245,
+      "start_time_s": 78.97035050392151,
+      "end_time_s": 79.25035572052002,
+      "duration_s": 0.28000521659851074,
+      "frame_count": 57,
+      "max_NIS": 787.0458843823499,
+      "position_residual_norm_range": [
+        0.008906242055454112,
+        0.0111582724778254
+      ],
+      "attitude_residual_norm_range": [
+        0.003380661785803822,
+        0.010366175930261732
+      ]
+    },
+    {
+      "start_index": 17849,
+      "end_index": 17867,
+      "start_time_s": 87.27023720741272,
+      "end_time_s": 87.36038327217102,
+      "duration_s": 0.09014606475830078,
+      "frame_count": 19,
+      "max_NIS": 1049.9742442658899,
+      "position_residual_norm_range": [
+        0.004729421425375,
+        0.00581167424238688
+      ],
+      "attitude_residual_norm_range": [
+        0.0022355286598281744,
+        0.007161904608409998
+      ]
+    },
+    {
+      "start_index": 19289,
+      "end_index": 19304,
+      "start_time_s": 94.47037672996521,
+      "end_time_s": 94.54464292526245,
+      "duration_s": 0.07426619529724121,
+      "frame_count": 16,
+      "max_NIS": 940.2324867891554,
+      "position_residual_norm_range": [
+        0.004199741262681881,
+        0.004851337014621964
+      ],
+      "attitude_residual_norm_range": [
+        0.0023187030560028964,
+        0.0070327802314550086
+      ]
+    },
+    {
+      "start_index": 19349,
+      "end_index": 19387,
+      "start_time_s": 94.77038621902466,
+      "end_time_s": 94.96037673950195,
+      "duration_s": 0.18999052047729492,
+      "frame_count": 39,
+      "max_NIS": 1573.1855125598508,
+      "position_residual_norm_range": [
+        0.0013345556824536197,
+        0.0059864740253944455
+      ],
+      "attitude_residual_norm_range": [
+        0.0026025339796220243,
+        0.009233090419912948
+      ]
+    }
+  ],
+  "high_vs_remaining": {
+    "high": {
+      "count": 1261,
+      "NIS": {
+        "mean": 245.92762017425682,
+        "median": 186.79658517459202,
+        "p95": 592.7084346500459,
+        "max": 1573.1855125598508
+      },
+      "position_residual_norm": {
+        "mean": 0.006932284014323049,
+        "median": 0.0061062469253761395,
+        "p95": 0.013996528140075645,
+        "max": 0.018939638186080222
+      },
+      "attitude_residual_norm": {
+        "mean": 0.00396903574822449,
+        "median": 0.0037703213780302556,
+        "p95": 0.00705755091605103,
+        "max": 0.010366175930261732
+      },
+      "speed_mps": {
+        "mean": 0.43365418618810875,
+        "median": 0.3687010288021902,
+        "p95": 0.8952798117725461,
+        "max": 0.9846950027818373
+      },
+      "omega_norm_rad_s": {
+        "mean": 0.5879987303372505,
+        "median": 0.42256172293671884,
+        "p95": 1.4273424916748463,
+        "max": 1.496310097081661
+      },
+      "acc_norm_mps2": {
+        "mean": 1.695420850046209,
+        "median": 1.3243055610676044,
+        "p95": 4.068114378977502,
+        "max": 6.983885384843062
+      },
+      "position_step_speed_mps": {
+        "mean": 0.4459781110789914,
+        "median": 0.3589765889491962,
+        "p95": 0.921682052445644,
+        "max": 0.9720207340986968
+      },
+      "acc_change_rate_mps3": {
+        "mean": 209.79862403005717,
+        "median": 160.94470085432988,
+        "p95": 583.9048405663715,
+        "max": 1765.0000252167354
+      },
+      "dt_s": {
+        "mean": 0.00503857224636093,
+        "median": 0.005464792251586914,
+        "p95": 0.005911350250244141,
+        "max": 0.006099700927734375
+      },
+      "median_absolute_position_residual_xyz_m": [
+        0.0029726711608260015,
+        0.0034452304249086296,
+        0.0016746414796970296
+      ],
+      "median_absolute_attitude_residual_xyz_rad": [
+        0.00035142869708191637,
+        0.0011995644927268116,
+        0.003304377860500331
+      ]
+    },
+    "remaining_updates": {
+      "count": 23951,
+      "NIS": {
+        "mean": 12.14186519680684,
+        "median": 5.149707107705136,
+        "p95": 57.82252653547849,
+        "max": 113.08414076158917
+      },
+      "position_residual_norm": {
+        "mean": 0.0022993752439156136,
+        "median": 0.001863105563780212,
+        "p95": 0.005646343150907598,
+        "max": 0.015057526490399025
+      },
+      "attitude_residual_norm": {
+        "mean": 0.0006089891308593129,
+        "median": 0.00045768228539942,
+        "p95": 0.0016652942667864136,
+        "max": 0.004448113927282334
+      },
+      "speed_mps": {
+        "mean": 0.20159135378561371,
+        "median": 0.012040629312608487,
+        "p95": 0.8828543368386823,
+        "max": 0.9839414608660177
+      },
+      "omega_norm_rad_s": {
+        "mean": 0.05655847305594273,
+        "median": 0.006943119921602926,
+        "p95": 0.3316361294675303,
+        "max": 1.4996134459535346
+      },
+      "acc_norm_mps2": {
+        "mean": 0.5029185792084792,
+        "median": 0.1664106641964614,
+        "p95": 2.334417371082119,
+        "max": 12.664338400263576
+      },
+      "position_step_speed_mps": {
+        "mean": 0.20756989356489847,
+        "median": 0.021767128068732038,
+        "p95": 0.8922960506248331,
+        "max": 0.9749980703606583
+      },
+      "acc_change_rate_mps3": {
+        "mean": 83.49256449242971,
+        "median": 27.923713875601806,
+        "p95": 340.14901634312855,
+        "max": 4415.555978134622
+      },
+      "dt_s": {
+        "mean": 0.004998163591421281,
+        "median": 0.00477290153503418,
+        "p95": 0.005904436111450195,
+        "max": 0.010091781616210938
+      },
+      "median_absolute_position_residual_xyz_m": [
+        0.0005611478650376922,
+        0.0011200209942596462,
+        0.0007473830856378726
+      ],
+      "median_absolute_attitude_residual_xyz_rad": [
+        0.0001918988818278292,
+        0.00022008530552892265,
+        0.00016861966229658436
+      ]
+    }
+  },
+  "correlations_log1p_NIS": {
+    "speed_mps": 0.4454580999096029,
+    "omega_norm_rad_s": 0.565366375510664,
+    "acc_norm_mps2": 0.5308535551075068,
+    "position_step_speed_mps": 0.44790494385704877,
+    "acc_change_rate_mps3": 0.37540640563250144,
+    "dt_s": 0.026822036602644227,
+    "position_residual_norm": 0.7783586029030027,
+    "attitude_residual_norm": 0.8207709202916313
+  },
+  "large_dt_frames": [
+    {
+      "imu_index": 25563,
+      "time_s": 125.84466862678528,
+      "NIS": 4.117988125072278,
+      "position_residual_norm": 0.00193177743566657,
+      "attitude_residual_norm": 0.0005170053868301143,
+      "speed_mps": 0.0067912019698731846,
+      "omega_norm_rad_s": 0.0044208839327748405,
+      "acc_norm_mps2": 0.09414083531353377,
+      "position_step_speed_mps": 0.00897081980030302,
+      "acc_change_rate_mps3": 32.64257001250757,
+      "dt_s": 0.010091781616210938
+    }
+  ],
+  "large_dt_threshold_s": 0.00885300636291504,
+  "yaw_boundary_events": [
+    {
+      "imu_index": 16608,
+      "time_s": 81.06459164619446,
+      "yaw_before_rad": 3.1406637269507542,
+      "yaw_after_rad": -3.139210863888478,
+      "yaw_step_rad": -6.279874590839232,
+      "shortest_rotation_rad": 0.003311508232171832,
+      "shortest_rotation_deg": 0.1897354455262743
+    },
+    {
+      "imu_index": 17009,
+      "time_s": 83.07038068771362,
+      "yaw_before_rad": -3.1406239042674726,
+      "yaw_after_rad": 3.140816318224475,
+      "yaw_step_rad": 6.2814402224919474,
+      "shortest_rotation_rad": 0.0017712239297114358,
+      "shortest_rotation_deg": 0.10148365574504165
+    },
+    {
+      "imu_index": 17504,
+      "time_s": 85.54468274116516,
+      "yaw_before_rad": 3.140223080401008,
+      "yaw_after_rad": -3.1415791159455373,
+      "yaw_step_rad": -6.281802196346545,
+      "shortest_rotation_rad": 0.0014388724952418682,
+      "shortest_rotation_deg": 0.08244132123481668
+    }
+  ],
+  "six_dimensional_attitude_comparison": {
+    "common_updates": 25212,
+    "attitude_norm_correlation": 0.999989775176448,
+    "max_absolute_norm_difference_rad": 4.782383561221376e-05,
+    "six_dimensional_NIS_compared": false,
+    "note": "6D filter observes 3D attitude; 15D observes 6D pose. NIS means do not rank accuracy."
+  },
+  "interpretation_limits": [
+    "Residual is prediction-to-observation discrepancy, not posterior discrepancy or ground-truth error.",
+    "FAST-LIO consumes IMU and is not independent ground truth.",
+    "Full innovation S is absent: NIS reconstruction and position/attitude percentage decomposition unavailable.",
+    "Temporal correlation does not identify a unique physical cause or validate Q/R/P0.",
+    "Chi-square(df=6) requires statistical assumptions not established here; no rejection criterion is used.",
+    "Saved recurrence checks do not independently verify raw-IMU selection or pose matching."
+  ]
+}
