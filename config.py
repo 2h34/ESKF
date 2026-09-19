@@ -67,17 +67,33 @@ class AlignmentConfig:
 
 @dataclass(frozen=True)
 class FilterNoiseConfig:
-    """Continuous-time 6D ESKF noise tuning.
+    """Continuous-time ESKF bias-driving noise tuning.
 
     ``gyro_bias_random_walk_density`` is the amplitude of the white driving
-    noise in the later continuous gyro-bias random-walk model. The default is
+    noise in the continuous gyro-bias random-walk model. The default is
     an engineering starting value, not a calibration result from this dataset.
 
     它描述“零偏随时间漂移得多快”，不是当前零偏 ``b_g`` 的数值，也不是
     静止段陀螺测量标准差；后两者分别属于名义状态估计和测量噪声统计。
+
+    ``accelerometer_bias_random_walk_density`` 对应 ``dot(b_a)=n_ba``，描述
+    加速度计零偏随机漂移的驱动噪声强度。它不是测量噪声、当前 ``b_a``、
+    静止段 ``acc_std`` 或标定结果；默认值只是 15D 的工程起始值。
     """
 
     gyro_bias_random_walk_density: float = 1e-4
+    accelerometer_bias_random_walk_density: float = 1e-3
+
+
+@dataclass(frozen=True)
+class InitializationConfig:
+    """Prior uncertainty used only when constructing the initial state.
+
+    ``initial_velocity_std_mps`` 是初始静止条件下 World-frame 速度先验的
+    标准差，不是 process noise，也不是由当前约 2 秒数据标定得到的结果。
+    """
+
+    initial_velocity_std_mps: float = 0.1
 
 
 @dataclass(frozen=True)
@@ -87,6 +103,9 @@ class ProjectConfig:
     static: StaticAnalysisConfig = field(default_factory=StaticAnalysisConfig)
     alignment: AlignmentConfig = field(default_factory=AlignmentConfig)
     filter_noise: FilterNoiseConfig = field(default_factory=FilterNoiseConfig)
+    initialization: InitializationConfig = field(
+        default_factory=InitializationConfig
+    )
 
 
 DEFAULT_CONFIG = ProjectConfig()
