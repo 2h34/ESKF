@@ -38,6 +38,8 @@ def format_report(
         @ GRAVITY_WORLD_MPS2
     )
     P_diagonal = np.diag(result.P0)
+    P_theta_ba = result.P0[6:9, 12:15]
+    P_ba_theta = result.P0[12:15, 6:9]
     return "\n".join(
         [
             "15D ESKF Initialization",
@@ -64,6 +66,10 @@ def format_report(
             f"diag(Ptheta0): {_array(P_diagonal[6:9])}",
             f"diag(Pbg0): {_array(P_diagonal[9:12])}",
             f"diag(Pba0): {_array(P_diagonal[12:15])}",
+            f"Ptheta-ba cross covariance: {_array(P_theta_ba)}",
+            f"Pba-theta cross covariance: {_array(P_ba_theta)}",
+            "theta-ba transpose symmetry error: "
+            f"{np.max(np.abs(P_theta_ba - P_ba_theta.T)):.3e}",
             f"P0 shape: {result.P0.shape}",
             f"Qc shape: {result.Qc.shape}",
             "P0 symmetry error: "

@@ -82,7 +82,7 @@ class Initialization15DTests(unittest.TestCase):
         )
         np.testing.assert_allclose(self.result.ba0_mps2, expected_ba0)
 
-    def test_P0_blocks_and_zero_initial_cross_terms(self) -> None:
+    def test_P0_blocks_and_modeled_theta_ba_cross_covariance(self) -> None:
         result = self.result
         pose_covariance = self.pose.cov_diag[result.pose_index]
         Ptheta0 = np.diag(pose_covariance[3:6])
@@ -101,6 +101,10 @@ class Initialization15DTests(unittest.TestCase):
         expected[9:12, 9:12] = np.diag(
             self.stats.gyro_std**2 / result.static_sample_count
         )
+        expected_P_theta_ba = Ptheta0 @ J_g.T
+        expected_P_ba_theta = J_g @ Ptheta0
+        expected[6:9, 12:15] = expected_P_theta_ba
+        expected[12:15, 6:9] = expected_P_ba_theta
         expected[12:15, 12:15] = (
             np.diag(self.stats.acc_std**2 / result.static_sample_count)
             + J_g @ Ptheta0 @ J_g.T
@@ -109,7 +113,49 @@ class Initialization15DTests(unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(result.P0)))
         np.testing.assert_allclose(result.P0, result.P0.T, rtol=0.0, atol=1e-15)
         self.assertTrue(np.all(np.diag(result.P0) > 0.0))
+        np.testing.assert_allclose(
+            result.P0[6:9, 12:15], expected_P_theta_ba
+        )
+        np.testing.assert_allclose(
+            result.P0[12:15, 6:9], expected_P_ba_theta
+        )
+        np.testing.assert_allclose(
+            result.P0[6:9, 12:15], result.P0[12:15, 6:9].T
+        )
         np.testing.assert_allclose(result.P0, expected)
+
+    def test_theta_ba_joint_covariance_is_statistically_consistent(self) -> None:
+        result = self.result
+        pose_covariance = self.pose.cov_diag[result.pose_index]
+        Ptheta0 = np.diag(pose_covariance[3:6])
+        gravity_B0 = (
+            quaternion_to_rotation_matrix(result.q0_xyzw).T
+            @ GRAVITY_WORLD_MPS2
+        )
+        J_g = hat(gravity_B0)
+        P_acc_mean = np.diag(
+            self.stats.acc_std**2 / result.static_sample_count
+        )
+        expected_joint = np.block(
+            [
+                [Ptheta0, Ptheta0 @ J_g.T],
+                [
+                    J_g @ Ptheta0,
+                    P_acc_mean + J_g @ Ptheta0 @ J_g.T,
+                ],
+            ]
+        )
+        joint_indices = [6, 7, 8, 12, 13, 14]
+        actual_joint = result.P0[np.ix_(joint_indices, joint_indices)]
+
+        self.assertTrue(np.all(np.isfinite(actual_joint)))
+        np.testing.assert_allclose(
+            actual_joint, actual_joint.T, rtol=0.0, atol=1e-15
+        )
+        np.testing.assert_allclose(actual_joint, expected_joint)
+        self.assertGreaterEqual(
+            float(np.linalg.eigvalsh(actual_joint).min()), -1e-15
+        )
 
     def test_Qc_block_ordering_and_values(self) -> None:
         result = self.result

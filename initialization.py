@@ -56,6 +56,10 @@ class ESKF15DInitialization:
     World-frame acceleration bias.
 
     ``P0`` ordering is ``[delta_p, delta_v, delta_theta, delta_b_g, delta_b_a]``.
+    Its first version models the physically derived ``delta_theta`` /
+    ``delta_b_a`` cross covariance caused by gravity compensation with an
+    uncertain initial attitude; other unsupported initial cross blocks remain
+    zero.
     Continuous-time ``Qc`` ordering is ``[n_a, n_g, n_bg, n_ba]``.
     """
 
@@ -355,6 +359,11 @@ def initialize_eskf15d(
     P_acc_mean = np.diag(acc_static_std**2 / common.static_sample_count)
     J_g = hat(gravity_B0_mps2)
     P_ba_gravity = J_g @ Ptheta0 @ J_g.T
+    # 由 delta_b_a ≈ J_g delta_theta - n_bar_a 可知，使用不确定的初始姿态
+    # 补偿重力时，delta_theta 与 delta_b_a 具有以下互协方差；其余没有可靠
+    # 建模依据的初始 cross covariance 在第一版中仍保持为零。
+    P0[6:9, 12:15] = Ptheta0 @ J_g.T
+    P0[12:15, 6:9] = J_g @ Ptheta0
     P0[12:15, 12:15] = P_acc_mean + P_ba_gravity
 
     acc_noise_density = acc_static_std * np.sqrt(common.median_dt_s)
