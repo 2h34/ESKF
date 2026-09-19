@@ -6,3 +6,6 @@ venv/
 *.tmp
 .DS_Store
 Thumbs.db
+
+# Generated development diagnostics; formal result CSV remains tracked.
+/results/eskf15d_debug.csv
