@@ -10,15 +10,12 @@
 
 | 文件 / 目录 | 职责 |
 | --- | --- |
-| [config.py](config.py)、[data_types.py](data_types.py) | 参数、坐标约定、数据结构 |
+| [config.py](config.py)、[data_types.py](data_types.py) | 分组参数常量、4 个具名数据结构 |
 | [rotation_utils.py](rotation_utils.py) | 四元数、旋转矩阵和 SO(3) 工具 |
-| [preprocess.py](preprocess.py)、[alignment.py](alignment.py) | 原始数据读取、单位转换、静止段统计、时间对齐 |
-| [processed_io.py](processed_io.py) | 预处理数据加载与校验 |
-| [initialization.py](initialization.py) | 名义状态、P0、Qc 初始化 |
-| [eskf15d.py](eskf15d.py) | Prediction、Pose Update、Injection、Reset |
-| [runner15d.py](runner15d.py) | IMU 调度、匹配观测选择、结果保存 |
+| [preprocess.py](preprocess.py) | CSV / NPZ 读写与校验、单位转换、静止统计、时间匹配 |
+| [eskf15d.py](eskf15d.py) | 初始化、ESKF15D 状态、Prediction、Pose Update、Injection、Reset |
 | [run_preprocess.py](scripts/run_preprocess.py) | 原始 CSV → processed 数据 |
-| [run_eskf15d.py](scripts/run_eskf15d.py) | 完整 15D 运行入口 |
+| [run_eskf15d.py](scripts/run_eskf15d.py) | 加载 → 初始化 → 预测/更新循环 → CSV 和摘要保存 |
 | [plot_eskf15d_results.py](scripts/plot_eskf15d_results.py) | 从正式结果 CSV 绘制六张曲线 |
 | `data/raw/` | [imu.csv](data/raw/imu.csv)、[pose_cov.csv](data/raw/pose_cov.csv) |
 | `data/processed/` | [IMU](data/processed/imu_processed.npz)、[pose](data/processed/pose_processed.npz)、[静止统计](data/processed/init_stats.npz)、[匹配表](data/processed/match_table.npz) |
@@ -36,7 +33,16 @@ uv run --with-requirements requirements.txt python scripts/plot_eskf15d_results.
 
 也可先执行 `python -m pip install -r requirements.txt`，再使用相同命令中的 `python scripts/...` 部分。不能假定所有机器均已预装依赖。
 
-命令会写入指定目录；要保留当前正式结果，请使用其他 `--output-dir`。预处理仍会生成诊断报告，Runner 仍会生成 debug CSV，绘图不依赖它们作为输入。展示版不提交这些开发副产物，`results/eskf15d_debug.csv` 已被精确忽略。当前绘图脚本按随附数据检查 25219 行。
+命令会写入指定目录；要保留当前正式结果，请使用其他 `--output-dir`。预处理生成四个兼容原格式的 NPZ 和简短 `diagnostic_report.json`，保留丢弃行、静止区间及时间匹配统计。滤波生成正式 CSV 与运行摘要，不再生成逐帧 debug CSV 或长文本报告。绘图接受至少两行的有效结果，不限制为随附数据的 25219 行。
+
+程序共 8 个 Python 文件；唯一有运行行为的类是 `ESKF15D`，另有 4 个仅描述数据字段的 dataclass。维护时按以下顺序阅读即可：
+
+1. 改阈值、噪声和初值先看 `config.py`，无需逐层查找配置对象。
+2. 看数据处理先读 `scripts/run_preprocess.py`，具体规则在 `preprocess.py`。
+3. 看运行时序先读 `scripts/run_eskf15d.py` 的 `run()`；初始化返回 `(eskf, k0)`，随后循环按顺序预测、条件更新并记录标量结果。
+4. 改公式看 `eskf15d.py` 的初始化函数、`predict()` 和 `update_pose()`；预测不返回调试对象，更新只返回两个残差范数和 NIS。
+
+读取文件时检查结构与时间轴，初始化时检查静止条件和初值，滤波时检查计算产生的数值问题。数据对象不再经过初始化上下文、状态快照、Debug 和运行结果等中转层。
 
 ## 3. 状态、初始化与 Prediction
 
@@ -89,7 +95,7 @@ P^- = Phi @ P @ Phi.T + Qd
 
 采用一阶离散，忽略高阶 dt²/dt³ 噪声耦合。当前 Qd 的位置对角块为零，不代表加速度噪声不会通过动力学影响位置。
 
-Runner 使用 gyro[k]、acc[k]、dt[k+1] 传播至 k+1，再按已有 pose_index_for_imu[k+1] 选择 Update。首步为 395 → 396，初始化观测不重复使用。dt 来自实际相邻 IMU timestamp，输出时间直接取 IMU timestamp，不累计重建时间、不重新匹配或插值。
+主循环使用 gyro[k]、acc[k]、dt[k+1] 传播至 k+1，再按已有 pose_index_for_imu[k+1] 选择 Update。首步为 395 → 396，初始化观测不重复使用。dt 来自实际相邻 IMU timestamp，输出时间直接取 IMU timestamp，不累计重建时间、不重新匹配或插值。
 
 ## 4. FAST-LIO 更新与 P / Q / R
 
@@ -132,7 +138,7 @@ G_reset[6:9,6:9] = I3 - 0.5 * hat(delta_theta)
 P <- G_reset @ P_joseph @ G_reset.T
 ```
 
-Reset 后误差均值归零，P 不清零。代码仅在非对称误差通过容差检查后做数值对称化；Runner 检查 P 有限、对称及最小特征值，不做特征值裁剪。
+Reset 后误差均值归零，P 不清零。代码仅在非对称误差通过容差检查后做数值对称化；主循环检查 P 有限、对称及最小特征值，不做特征值裁剪。
 
 ## 5. 实验结果与六张曲线
 
@@ -179,4 +185,6 @@ FAST-LIO 是参与 Update 的观测来源，本身也使用 IMU，不是独立 g
 
 [完整 15D 开发分支](https://github.com/2h34/ESKF/tree/15D)保留独立 6D 实现、单元测试、逐帧 Debug、离线误差诊断和完整学习开发过程。该分支 README 包含原有 6D 版本与验证内容。
 
-当前 `15D-final` 仅用于最终作业展示。共享配置和初始化模块保留已有定义，避免为了精简而重构已验证的算法。
+当前 `15D-final` 用于最终作业展示，已移除 6D 遗留初始化和开发诊断包装。保留具名数据结构、独立旋转函数与直接对应公式的滤波实现；内部接口不兼容旧开发版，但三个命令行入口、四个 NPZ、正式结果 CSV 和运行摘要保持兼容。学习笔记记录历史学习过程，旧模块名不代表当前文件结构。
+
+重构验证应在临时目录执行完整预处理、滤波和绘图：逐字段比较四个 NPZ，逐行比较正式 CSV，比较全部摘要指标，并检查六张图片可以解码。仅通过导入或 `--help` 不构成结果验证。

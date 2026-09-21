@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from config import DEFAULT_CONFIG, NumericalSafetyConfig
+import config as cfg
 
 
 FloatArray = NDArray[np.float64]
@@ -26,11 +26,7 @@ def _vector(value: ArrayLike, size: int, name: str) -> FloatArray:
 
 
 def hat(vector: ArrayLike) -> FloatArray:
-    """Return the 3x3 skew matrix satisfying ``hat(a) @ b == cross(a, b)``.
-
-    ``hat`` 把三维向量映射为李代数 so(3) 的反对称矩阵，使叉乘能够写成
-    矩阵乘法；ESKF 的姿态误差动力学和 reset Jacobian 都使用这一表示。
-    """
+    """Return the 3x3 skew matrix satisfying ``hat(a) @ b == cross(a, b)``."""
 
     x, y, z = _vector(vector, 3, "vector")
     return np.array([[0.0, -z, y], [z, 0.0, -x], [-y, x, 0.0]], dtype=float)
@@ -38,28 +34,19 @@ def hat(vector: ArrayLike) -> FloatArray:
 
 def normalize_quaternion(
     quaternion_xyzw: ArrayLike,
-    numerical: NumericalSafetyConfig = DEFAULT_CONFIG.numerical,
 ) -> FloatArray:
-    """Normalize one finite quaternion with storage order ``[x, y, z, w]``.
-
-    单位四元数才表示纯旋转；归一化用于清除浮点累计误差，而近零四元数没有
-    可恢复的旋转含义，因此必须明确拒绝，不能静默归一化。
-    """
+    """Normalize one finite quaternion with storage order ``[x, y, z, w]``."""
 
     q = _vector(quaternion_xyzw, 4, "quaternion_xyzw")
     norm = float(np.linalg.norm(q))
-    minimum = numerical.minimum_valid_quaternion_norm
+    minimum = cfg.MINIMUM_VALID_QUATERNION_NORM
     if norm < minimum:
         raise ValueError(f"quaternion norm {norm:.3e} is below {minimum:.3e}")
     return q / norm
 
 
 def quaternion_multiply(q1_xyzw: ArrayLike, q2_xyzw: ArrayLike) -> FloatArray:
-    """Return Hamilton product ``q1 tensor-product q2`` in xyzw order.
-
-    代码存储顺序是 ``xyzw``，但乘法仍是标准 Hamilton product；乘数顺序
-    表示旋转复合顺序，不能因为更换存储布局而交换。
-    """
+    """Return Hamilton product ``q1 tensor-product q2`` in xyzw order."""
 
     q1 = _vector(q1_xyzw, 4, "q1_xyzw")
     q2 = _vector(q2_xyzw, 4, "q2_xyzw")
@@ -72,17 +59,12 @@ def quaternion_multiply(q1_xyzw: ArrayLike, q2_xyzw: ArrayLike) -> FloatArray:
 
 def quaternion_inverse(
     quaternion_xyzw: ArrayLike,
-    numerical: NumericalSafetyConfig = DEFAULT_CONFIG.numerical,
 ) -> FloatArray:
-    """Return the multiplicative inverse of a finite xyzw quaternion.
-
-    对单位四元数它等于共轭；这里仍除以范数平方，使函数对有限的非单位输入
-    保持真正的乘法逆，并对近零输入报错。
-    """
+    """Return the multiplicative inverse of a finite xyzw quaternion."""
 
     q = _vector(quaternion_xyzw, 4, "quaternion_xyzw")
     norm_sq = float(np.dot(q, q))
-    minimum_sq = numerical.minimum_valid_quaternion_norm**2
+    minimum_sq = cfg.MINIMUM_VALID_QUATERNION_NORM**2
     if norm_sq < minimum_sq:
         raise ValueError("cannot invert a near-zero quaternion")
     return np.array([-q[0], -q[1], -q[2], q[3]], dtype=float) / norm_sq
@@ -90,18 +72,13 @@ def quaternion_inverse(
 
 def rotvec_to_quaternion(
     rotation_vector_rad: ArrayLike,
-    numerical: NumericalSafetyConfig = DEFAULT_CONFIG.numerical,
 ) -> FloatArray:
-    """Convert a rotation vector in radians, shape ``(3,)``, to xyzw.
-
-    rotation vector 的方向是旋转轴，模长是旋转角；该函数是 SO(3) 指数映射
-    的四元数实现，小角度分支用级数避免 ``sin(theta/2)/theta`` 数值不稳。
-    """
+    """Convert a rotation vector in radians, shape ``(3,)``, to xyzw."""
 
     phi = _vector(rotation_vector_rad, 3, "rotation_vector_rad")
     theta = float(np.linalg.norm(phi))
     half_theta = 0.5 * theta
-    epsilon = numerical.small_angle_epsilon
+    epsilon = cfg.SMALL_ANGLE_EPSILON
     if theta < epsilon:
         # sin(theta/2)/theta = 1/2 - theta^2/48 + theta^4/3840 + O(theta^6)
         theta_sq = theta * theta
@@ -109,25 +86,20 @@ def rotvec_to_quaternion(
     else:
         scale = np.sin(half_theta) / theta
     quaternion = np.concatenate((scale * phi, np.array([np.cos(half_theta)])))
-    return normalize_quaternion(quaternion, numerical)
+    return normalize_quaternion(quaternion)
 
 
 def quaternion_to_rotvec(
     quaternion_xyzw: ArrayLike,
-    numerical: NumericalSafetyConfig = DEFAULT_CONFIG.numerical,
 ) -> FloatArray:
-    """Convert an xyzw quaternion to the shortest rotation vector in radians.
+    """Convert an xyzw quaternion to the shortest rotation vector in radians."""
 
-    这是 SO(3) 对数映射的工程实现。先选择标量部非负的等价四元数，以返回
-    最短旋转；小角度时用 ``rotvec ≈ 2*q_xyz`` 避免除以极小量。
-    """
-
-    q = normalize_quaternion(quaternion_xyzw, numerical)
+    q = normalize_quaternion(quaternion_xyzw)
     if q[3] < 0.0:
         q = -q
     vector = q[:3]
     vector_norm = float(np.linalg.norm(vector))
-    epsilon = numerical.small_angle_epsilon
+    epsilon = cfg.SMALL_ANGLE_EPSILON
     if vector_norm < epsilon:
         return 2.0 * vector
     angle = 2.0 * np.arctan2(vector_norm, q[3])
@@ -149,18 +121,12 @@ def quaternion_to_rotation_matrix(quaternion_xyzw: ArrayLike) -> FloatArray:
 
 
 def quaternion_to_rpy(quaternion_xyzw: ArrayLike) -> FloatArray:
-    """Return ``[roll, pitch, yaw]`` in radians using ZYX yaw-pitch-roll.
-
-    RPY 使用 ZYX yaw-pitch-roll 约定，即按
-    ``R = Rz(yaw) @ Ry(pitch) @ Rx(roll)`` 对当前旋转矩阵进行分解。
-    它主要用于结果展示和人工理解；ESKF 内部姿态传播始终使用四元数，
-    而不是欧拉角。
-    """
+    """Return ``[roll, pitch, yaw]`` in radians using ZYX yaw-pitch-roll."""
 
     rotation = quaternion_to_rotation_matrix(quaternion_xyzw)
     pitch_argument = float(np.clip(-rotation[2, 0], -1.0, 1.0))
     pitch = np.arcsin(pitch_argument)
-    if abs(abs(pitch_argument) - 1.0) <= DEFAULT_CONFIG.numerical.quaternion_norm_epsilon:
+    if abs(abs(pitch_argument) - 1.0) <= cfg.QUATERNION_NORM_EPSILON:
         # At gimbal lock roll and yaw are not individually observable. Fix
         # roll=0 and return the equivalent, deterministic yaw representation.
         roll = 0.0

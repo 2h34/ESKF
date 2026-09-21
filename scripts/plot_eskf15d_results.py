@@ -1,4 +1,4 @@
-"""Plot the six required Phase 3.7 curves from frozen 15D ESKF results."""
+"""Plot position and ZYX roll/pitch/yaw from the 15D result CSV."""
 
 from __future__ import annotations
 
@@ -11,13 +11,11 @@ import matplotlib
 
 matplotlib.use("Agg")
 
-import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import numpy as np
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_ROW_COUNT = 25219
 FIGURE_DPI = 200
 LINE_COLOR = "#1F4E79"
 GRID_COLOR = "#D1D5DB"
@@ -39,10 +37,8 @@ def _load_result(path: Path) -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarr
     except OSError as exc:
         raise ValueError(f"failed to read {path}: {exc}") from exc
 
-    if len(rows) != EXPECTED_ROW_COUNT:
-        raise ValueError(
-            f"expected {EXPECTED_ROW_COUNT} result rows, found {len(rows)}"
-        )
+    if len(rows) < 2:
+        raise ValueError("result CSV needs at least two rows")
 
     required = {"timestamp", "imu_index", *(spec[0] for spec in PLOT_SPECS)}
     missing = required.difference(rows[0] if rows else ())
@@ -95,63 +91,21 @@ def _save_plot(
     figure.savefig(path, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
     plt.close(figure)
 
-    if not path.is_file() or path.stat().st_size == 0:
-        raise RuntimeError(f"figure was not saved correctly: {path}")
-    image = mpimg.imread(path)
-    if image.ndim not in (2, 3) or image.size == 0 or not np.all(np.isfinite(image)):
-        raise RuntimeError(f"saved figure cannot be read correctly: {path}")
-
 
 def generate_plots(result_csv: Path, output_directory: Path) -> dict[str, object]:
-    timestamp, imu_index, values = _load_result(result_csv)
+    timestamp, _, values = _load_result(result_csv)
     time_s = timestamp - timestamp[0]
-    if time_s[0] != 0.0:
-        raise RuntimeError("the first relative timestamp must be exactly zero")
-
-    output_paths: dict[str, str] = {}
-    ranges: dict[str, dict[str, float]] = {}
-    maximum_steps: dict[str, dict[str, float | int]] = {}
+    output_paths = {}
     for field, ylabel, title, filename in PLOT_SPECS:
         path = output_directory / filename
         _save_plot(time_s, values[field], ylabel, title, path)
         output_paths[field] = str(path.resolve())
-        ranges[field] = {
-            "min": float(np.min(values[field])),
-            "max": float(np.max(values[field])),
-        }
-        differences = np.abs(np.diff(values[field]))
-        step_position = int(np.argmax(differences)) + 1
-        maximum_steps[field] = {
-            "absolute_step": float(differences[step_position - 1]),
-            "time_s": float(time_s[step_position]),
-            "imu_index": int(imu_index[step_position]),
-        }
-
-    # This detects only the Euler-angle representation boundary. The formal yaw
-    # plot deliberately retains the raw CSV values and does not use np.unwrap().
-    yaw = values["yaw_rad"]
-    yaw_boundary_positions = np.flatnonzero(np.abs(np.diff(yaw)) > np.pi) + 1
-    yaw_boundary_events = [
-        {
-            "time_s": float(time_s[position]),
-            "imu_index": int(imu_index[position]),
-            "yaw_before_rad": float(yaw[position - 1]),
-            "yaw_after_rad": float(yaw[position]),
-        }
-        for position in yaw_boundary_positions
-    ]
-
+    # Preserve raw yaw values, including the +/-pi representation boundary.
     return {
-        "row_count": int(timestamp.size),
-        "start_time_s": float(time_s[0]),
-        "end_time_s": float(time_s[-1]),
-        "timestamps_strictly_increasing": True,
-        "all_plot_components_finite": True,
-        "ranges": ranges,
-        "maximum_adjacent_steps": maximum_steps,
-        "yaw_boundary_events": yaw_boundary_events,
-        "figure_paths": output_paths,
+        "row_count": int(timestamp.size), "start_time_s": float(time_s[0]),
+        "end_time_s": float(time_s[-1]), "figure_paths": output_paths,
     }
+
 
 
 def main() -> None:
