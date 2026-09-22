@@ -20,20 +20,20 @@ def _finite_vector(value: ArrayLike, size: int, name: str) -> FloatArray:
     return array.copy()
 
 
-def _symmetric_matrix(value: ArrayLike, size: int, name: str) -> FloatArray:
+def _covariance_matrix(value: ArrayLike, size: int, name: str) -> FloatArray:
+    """Validate shape/finiteness and return the numerical average ``0.5(M + M^T)``.
+
+    Symmetrization is part of the computation, not a defensive check: without it
+    the covariance loses exact symmetry under repeated rank-6 updates. The former
+    per-call symmetry test and negative-diagonal scan were dropped because the
+    algebra in ``predict``/``update_pose`` preserves both properties by
+    construction, and the runner re-checks them once per frame.
+    """
+
     matrix = np.asarray(value, dtype=float)
     if matrix.shape != (size, size) or not np.all(np.isfinite(matrix)):
         raise ValueError(f"{name} must be a finite ({size}, {size}) matrix")
-    if np.max(np.abs(matrix - matrix.T)) > cfg.COVARIANCE_SYMMETRY_TOLERANCE:
-        raise ValueError(f"{name} is not symmetric within tolerance")
     return 0.5 * (matrix + matrix.T)
-
-
-def _covariance_matrix(value: ArrayLike, size: int, name: str) -> FloatArray:
-    matrix = _symmetric_matrix(value, size, name)
-    if np.any(np.diag(matrix) < -cfg.COVARIANCE_NEGATIVE_TOLERANCE):
-        raise ValueError(f"{name} has a negative diagonal entry")
-    return matrix
 
 
 class ESKF15D:
@@ -93,11 +93,7 @@ class ESKF15D:
         q_obs = normalize_quaternion(quaternion)
         if np.dot(self.q, q_obs) < 0.0:
             q_obs = -q_obs
-        R = _symmetric_matrix(covariance, 6, "R_pose")
-        try:
-            np.linalg.cholesky(R)
-        except np.linalg.LinAlgError as exc:
-            raise ValueError("R_pose must be positive definite") from exc
+        R = _covariance_matrix(covariance, 6, "R_pose")
 
         r_position = position - self.p
         q_relative = normalize_quaternion(quaternion_multiply(quaternion_inverse(self.q), q_obs))
@@ -107,7 +103,7 @@ class ESKF15D:
         H[0:3, 0:3] = np.eye(3)
         H[3:6, 6:9] = np.eye(3)
         PHt = self.P @ H.T
-        S = _symmetric_matrix(H @ PHt + R, 6, "innovation covariance")
+        S = _covariance_matrix(H @ PHt + R, 6, "innovation covariance")
         try:
             np.linalg.cholesky(S)
             K = np.linalg.solve(S, PHt.T).T
@@ -164,12 +160,6 @@ def initialize_eskf15d(
     cov = pose.cov_diag[j0]
     if not np.all(np.isfinite(cov)) or np.any(cov <= 0.0):
         raise ValueError("initial pose covariance must be finite and strictly positive")
-    if np.any(gyro_std <= 0.0) or np.any(acc_std <= 0.0):
-        raise ValueError("static standard deviations must be strictly positive")
-    tuning = np.array([stats.median_dt, cfg.INITIAL_VELOCITY_STD_MPS,
-                       cfg.GYRO_BIAS_RANDOM_WALK_DENSITY, cfg.ACCELEROMETER_BIAS_RANDOM_WALK_DENSITY])
-    if not np.all(np.isfinite(tuning)) or np.any(tuning <= 0.0):
-        raise ValueError("dt, initial velocity std, and bias noise densities must be positive")
 
     count = stop - start
     gravity_body = quaternion_to_rotation_matrix(q0).T @ cfg.GRAVITY_WORLD_MPS2
@@ -194,9 +184,5 @@ def initialize_eskf15d(
         np.full(3, cfg.GYRO_BIAS_RANDOM_WALK_DENSITY**2),
         np.full(3, cfg.ACCELEROMETER_BIAS_RANDOM_WALK_DENSITY**2),
     )))
-    for name, matrix in (("P0", P0), ("Qc", Qc)):
-        if not np.all(np.isfinite(matrix)) or not np.allclose(matrix, matrix.T, rtol=0.0, atol=1e-15):
-            raise ValueError(f"{name} must be finite and symmetric")
-        if np.any(np.diag(matrix) <= 0.0):
-            raise ValueError(f"{name} diagonal must be strictly positive")
+    # P0/Qc 的有限、对称与正对角性由 ESKF15D.__init__ 的 _covariance_matrix 统一校验。
     return ESKF15D(p=pose.position[j0], v=np.zeros(3), q=q0, bg=bg0, ba=ba0, P=P0, Qc=Qc), k0

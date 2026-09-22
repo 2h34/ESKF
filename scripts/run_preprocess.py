@@ -27,7 +27,6 @@ def run(raw_directory: Path, output_directory: Path) -> dict:
     save_processed_data(output_directory, imu, pose, stats, alignment)
 
     matched = alignment.pose_index_for_imu >= 0
-    errors = np.abs(alignment.time_error[matched])
     match_count = int(np.count_nonzero(matched))
     report = {
         "imu": imu_summary, "pose": pose_summary,
@@ -41,9 +40,6 @@ def run(raw_directory: Path, output_directory: Path) -> dict:
         "alignment": {
             "valid_match_count": match_count, "unmatched_imu_count": int(matched.size - match_count),
             "unused_pose_count": int(pose.timestamp.size - match_count),
-            "tolerance_s": alignment.tolerance_s,
-            "mean_abs_time_error_s": float(np.mean(errors)) if match_count else None,
-            "max_abs_time_error_s": float(np.max(errors)) if match_count else None,
         },
     }
     text = json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False)

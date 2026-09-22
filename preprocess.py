@@ -25,15 +25,17 @@ IMU_COLUMNS = ("time", "ax", "ay", "az", "gx", "gy", "gz")
 POSE_BASE_COLUMNS = ("time", "x", "y", "z", "qx", "qy", "qz", "qw")
 COVARIANCE_COLUMNS = tuple(f"cov_{row}{column}" for row in range(6) for column in range(6))
 POSE_COLUMNS = POSE_BASE_COLUMNS + COVARIANCE_COLUMNS
-COVARIANCE_DIAGONAL_COLUMNS = tuple(f"cov_{index}{index}" for index in range(6))
+# 表头按行优先排列 cov_rc：对角项 cov_00/cov_11/... 在 6x6 块中的偏移为 0,7,14,21,28,35。
+COVARIANCE_DIAGONAL_INDICES = tuple(
+    len(POSE_BASE_COLUMNS) + 7 * index for index in range(6)
+)
 
 
 def _read_numeric_csv(
     path: str | Path,
     expected_columns: Sequence[str],
-    invalid_policy: str,
 ) -> tuple[FloatArray, tuple[int, ...], int]:
-    """Read named numeric columns and either reject or explicitly drop bad rows."""
+    """Read named numeric columns and drop rows that are not fully numeric."""
 
     csv_path = Path(path)
     valid_rows: list[list[float]] = []
@@ -65,10 +67,6 @@ def _read_numeric_csv(
                 continue
             valid_rows.append(values)
     raw_count = len(valid_rows) + len(invalid_rows)
-    if invalid_rows and invalid_policy == "raise":
-        raise ValueError(f"{csv_path} has invalid data rows {invalid_rows}")
-    if invalid_policy not in {"raise", "drop"}:
-        raise ValueError(f"unsupported invalid sample policy: {invalid_policy}")
     if not valid_rows:
         raise ValueError(f"{csv_path} has no valid data rows")
     return np.asarray(valid_rows, dtype=float), tuple(invalid_rows), raw_count
@@ -93,19 +91,13 @@ def load_imu_csv(
 ) -> tuple[ProcessedIMUData, dict]:
     """Load IMU CSV by column name and convert accelerometer g to m/s^2."""
 
-    values, invalid_rows, raw_count = _read_numeric_csv(
-        path, IMU_COLUMNS, cfg.INVALID_SAMPLE_POLICY
-    )
+    values, invalid_rows, raw_count = _read_numeric_csv(path, IMU_COLUMNS)
     timestamp = values[:, 0]
     differences = _validate_timestamps(timestamp, "IMU")
     dt = np.empty(timestamp.shape, dtype=float)
     dt[0] = np.nan
     dt[1:] = differences
     median_dt = float(np.median(differences))
-    small_limit = cfg.TIMESTAMP_SMALL_STEP_RATIO * median_dt
-    large_limit = cfg.TIMESTAMP_LARGE_STEP_RATIO * median_dt
-    small_step_indices = np.flatnonzero(differences < small_limit) + 1
-    large_step_indices = np.flatnonzero(differences > large_limit) + 1
     processed = ProcessedIMUData(
         timestamp=timestamp,
         dt=dt,
@@ -119,8 +111,6 @@ def load_imu_csv(
         "start_timestamp": float(timestamp[0]), "end_timestamp": float(timestamp[-1]),
         "mean_dt": float(np.mean(differences)), "median_dt": median_dt,
         "min_dt": float(np.min(differences)), "max_dt": float(np.max(differences)),
-        "small_step_count": int(small_step_indices.size),
-        "large_step_count": int(large_step_indices.size),
     }
     return processed, diagnostics
 
@@ -130,9 +120,7 @@ def load_pose_csv(
 ) -> tuple[ProcessedPoseData, dict]:
     """Load FAST-LIO pose/covariance CSV, validate, and normalize xyzw quaternions."""
 
-    values, invalid_rows, raw_count = _read_numeric_csv(
-        path, POSE_COLUMNS, cfg.INVALID_SAMPLE_POLICY
-    )
+    values, invalid_rows, raw_count = _read_numeric_csv(path, POSE_COLUMNS)
     timestamp = values[:, 0]
     differences = _validate_timestamps(timestamp, "pose")
     quaternion_raw = values[:, 4:8]
@@ -146,9 +134,8 @@ def load_pose_csv(
         indices = np.flatnonzero(invalid_quaternion).tolist()
         raise ValueError(f"pose has invalid quaternion frames {indices}")
     quaternion_xyzw = quaternion_raw / quaternion_norm[:, None]
-    header_index = {column: index for index, column in enumerate(POSE_COLUMNS)}
-    diagonal_indices = [header_index[column] for column in COVARIANCE_DIAGONAL_COLUMNS]
-    covariance_diag = values[:, diagonal_indices]
+    # 对角方差列在行优先的 6x6 协方差块中不连续。
+    covariance_diag = values[:, COVARIANCE_DIAGONAL_INDICES]
     invalid_covariance = np.any(
         covariance_diag < -cfg.COVARIANCE_NEGATIVE_TOLERANCE, axis=1
     )
@@ -156,7 +143,6 @@ def load_pose_csv(
     if invalid_covariance_count:
         indices = np.flatnonzero(invalid_covariance).tolist()
         raise ValueError(f"pose has negative covariance diagonal frames {indices}")
-    zero_covariance = np.all(covariance_diag == 0.0, axis=1)
     processed = ProcessedPoseData(
         timestamp=timestamp,
         position=values[:, 1:4],
@@ -168,7 +154,6 @@ def load_pose_csv(
         "invalid_sample_count": len(invalid_rows), "invalid_source_rows": invalid_rows,
         "start_timestamp": float(timestamp[0]), "end_timestamp": float(timestamp[-1]),
         "median_dt": float(np.median(differences)),
-        "zero_covariance_frame_count": int(np.count_nonzero(zero_covariance)),
     }
     return processed, diagnostics
 
@@ -244,16 +229,7 @@ def analyze_initial_static_segment(
         gyro_std=gyro_std,
         acc_mean=acc_mean,
         acc_std=acc_std,
-        acc_norm_mean=acc_norm_mean,
-        acc_norm_std=acc_norm_std,
-        mean_dt=float(np.mean(valid_dt)),
         median_dt=float(np.median(valid_dt)),
-        min_dt=float(np.min(valid_dt)),
-        max_dt=float(np.max(valid_dt)),
-        candidate_start_idx=start,
-        candidate_end_idx=stop,
-        candidate_start_time=float(imu.timestamp[start]),
-        candidate_end_time=float(imu.timestamp[stop - 1]),
         is_static=is_static,
         decision_reasons=reasons,
     )
@@ -277,7 +253,6 @@ def align_timestamps(
     if not np.isfinite(tolerance) or tolerance <= 0.0:
         raise ValueError("timestamp tolerance must be finite and positive")
     pose_index = np.full(imu_time.shape, -1, dtype=np.int64)
-    time_error = np.full(imu_time.shape, np.nan, dtype=float)
     pose_cursor = 0
     for imu_index, imu_value in enumerate(imu_time):
         while (
@@ -296,9 +271,8 @@ def align_timestamps(
         error = float(pose_time[candidate] - imu_value)
         if abs(error) <= tolerance:
             pose_index[imu_index] = candidate
-            time_error[imu_index] = error
             pose_cursor = candidate + 1
-    return AlignmentResult(pose_index, time_error, tolerance)
+    return AlignmentResult(pose_index)
 
 
 def save_processed_data(
@@ -316,16 +290,11 @@ def save_processed_data(
 
 def _read_npz(path: str | Path, required_keys: set[str]) -> dict[str, np.ndarray]:
     npz_path = Path(path)
-    try:
-        with np.load(npz_path, allow_pickle=False) as archive:
-            missing = required_keys.difference(archive.files)
-            if missing:
-                raise ValueError(f"{npz_path} is missing keys: {sorted(missing)}")
-            return {key: archive[key] for key in required_keys}
-    except (OSError, ValueError) as exc:
-        if isinstance(exc, ValueError) and str(exc).startswith(str(npz_path)):
-            raise
-        raise ValueError(f"failed to load {npz_path}: {exc}") from exc
+    with np.load(npz_path, allow_pickle=False) as archive:
+        missing = required_keys.difference(archive.files)
+        if missing:
+            raise ValueError(f"{npz_path} is missing keys: {sorted(missing)}")
+        return {key: archive[key] for key in required_keys}
 
 
 def _float_array(
@@ -387,12 +356,13 @@ def load_processed_imu(path: str | Path) -> ProcessedIMUData:
     dt = _float_array(arrays, "dt", (sample_count,))
     gyro = _finite_float_array(arrays, "gyro_rad_s", (sample_count, 3))
     acc = _finite_float_array(arrays, "acc_mps2", (sample_count, 3))
-    _validate_timestamps(timestamp, "IMU timestamp")
+    # 复用第一次差分，避免对同一时间轴重复 np.diff。
+    differences = _validate_timestamps(timestamp, "IMU timestamp")
     if not np.isnan(dt[0]):
         raise ValueError("dt[0] must be NaN because the first sample has no predecessor")
     if not np.all(np.isfinite(dt[1:])) or np.any(dt[1:] <= 0.0):
         raise ValueError("dt[1:] must be finite and strictly positive")
-    if not np.allclose(dt[1:], np.diff(timestamp), rtol=1e-10, atol=1e-12):
+    if not np.allclose(dt[1:], differences, rtol=1e-10, atol=1e-12):
         raise ValueError("dt[1:] is inconsistent with timestamp differences")
     return ProcessedIMUData(timestamp, dt, gyro, acc)
 
@@ -432,20 +402,11 @@ _INIT_KEYS = {
     "static_end_idx",
     "static_start_time",
     "static_end_time",
-    "candidate_start_idx",
-    "candidate_end_idx",
-    "candidate_start_time",
-    "candidate_end_time",
     "gyro_mean",
     "gyro_std",
     "acc_mean",
     "acc_std",
-    "acc_norm_mean",
-    "acc_norm_std",
-    "mean_dt",
     "median_dt",
-    "min_dt",
-    "max_dt",
     "is_static",
     "decision_reasons",
 }
@@ -461,24 +422,15 @@ def load_init_stats(
     arrays = _read_npz(path, _INIT_KEYS)
     static_start = _scalar_int(arrays, "static_start_idx")
     static_end = _scalar_int(arrays, "static_end_idx")
-    candidate_start = _scalar_int(arrays, "candidate_start_idx")
-    candidate_end = _scalar_int(arrays, "candidate_end_idx")
-    if not (0 <= candidate_start <= static_start < static_end <= candidate_end):
-        raise ValueError("static range must be non-empty and inside the candidate range")
-    if imu_sample_count is not None and candidate_end > imu_sample_count:
-        raise ValueError("candidate_end_idx exceeds the IMU sample count")
+    if not 0 <= static_start < static_end:
+        raise ValueError("static range must be a non-empty interval")
+    if imu_sample_count is not None and static_end > imu_sample_count:
+        raise ValueError("static_end_idx exceeds the IMU sample count")
 
     static_start_time = _scalar_float(arrays, "static_start_time")
     static_end_time = _scalar_float(arrays, "static_end_time")
-    candidate_start_time = _scalar_float(arrays, "candidate_start_time")
-    candidate_end_time = _scalar_float(arrays, "candidate_end_time")
-    if not (
-        candidate_start_time
-        <= static_start_time
-        <= static_end_time
-        <= candidate_end_time
-    ):
-        raise ValueError("static times must be ordered inside the candidate interval")
+    if static_start_time > static_end_time:
+        raise ValueError("static times must be ordered")
 
     gyro_mean = _finite_float_array(arrays, "gyro_mean", (3,))
     gyro_std = _finite_float_array(arrays, "gyro_std", (3,))
@@ -487,18 +439,9 @@ def load_init_stats(
     if np.any(gyro_std < 0.0) or np.any(acc_std < 0.0):
         raise ValueError("standard deviations must be non-negative")
 
-    acc_norm_mean = _scalar_float(arrays, "acc_norm_mean")
-    acc_norm_std = _scalar_float(arrays, "acc_norm_std")
-    mean_dt = _scalar_float(arrays, "mean_dt")
     median_dt = _scalar_float(arrays, "median_dt")
-    min_dt = _scalar_float(arrays, "min_dt")
-    max_dt = _scalar_float(arrays, "max_dt")
-    if acc_norm_mean < 0.0 or acc_norm_std < 0.0:
-        raise ValueError("accelerometer norm statistics must be non-negative")
-    if min(mean_dt, median_dt, min_dt, max_dt) <= 0.0 or not (
-        min_dt <= median_dt <= max_dt
-    ):
-        raise ValueError("dt statistics are invalid or inconsistent")
+    if median_dt <= 0.0:
+        raise ValueError("median_dt must be positive")
 
     reasons_array = np.asarray(arrays["decision_reasons"])
     if reasons_array.ndim != 1 or reasons_array.dtype.kind not in {"U", "S"}:
@@ -513,16 +456,7 @@ def load_init_stats(
         gyro_std=gyro_std,
         acc_mean=acc_mean,
         acc_std=acc_std,
-        acc_norm_mean=acc_norm_mean,
-        acc_norm_std=acc_norm_std,
-        mean_dt=mean_dt,
         median_dt=median_dt,
-        min_dt=min_dt,
-        max_dt=max_dt,
-        candidate_start_idx=candidate_start,
-        candidate_end_idx=candidate_end,
-        candidate_start_time=candidate_start_time,
-        candidate_end_time=candidate_end_time,
         is_static=_scalar_bool(arrays, "is_static"),
         decision_reasons=reasons,
     )
@@ -536,9 +470,7 @@ def load_alignment(
 ) -> AlignmentResult:
     """Load and validate ``match_table.npz`` as ``AlignmentResult``."""
 
-    arrays = _read_npz(
-        path, {"pose_index_for_imu", "time_error", "tolerance_s"}
-    )
+    arrays = _read_npz(path, {"pose_index_for_imu"})
     index_raw = np.asarray(arrays["pose_index_for_imu"])
     if index_raw.shape != (imu_sample_count,):
         raise ValueError(
@@ -548,20 +480,9 @@ def load_alignment(
     if not np.issubdtype(index_raw.dtype, np.integer):
         raise ValueError("pose_index_for_imu must have an integer dtype")
     pose_index: IntArray = index_raw.astype(np.int64, copy=False)
-    time_error = _float_array(arrays, "time_error", (imu_sample_count,))
-    tolerance = _scalar_float(arrays, "tolerance_s")
-    if tolerance <= 0.0:
-        raise ValueError("tolerance_s must be positive")
     if np.any(pose_index < -1) or np.any(pose_index >= pose_sample_count):
         raise ValueError("pose_index_for_imu contains an out-of-range pose index")
-    valid = pose_index >= 0
-    if not np.all(np.isfinite(time_error[valid])):
-        raise ValueError("matched time_error values must be finite")
-    if not np.all(np.isnan(time_error[~valid])):
-        raise ValueError("unmatched time_error values must be NaN")
-    if np.any(np.abs(time_error[valid]) > tolerance + 1e-12):
-        raise ValueError("a matched time_error exceeds tolerance_s")
-    matched_pose = pose_index[valid]
+    matched_pose = pose_index[pose_index >= 0]
     if matched_pose.size > 1 and np.any(np.diff(matched_pose) <= 0):
         raise ValueError("matched pose indices must be strictly increasing and unique")
-    return AlignmentResult(pose_index, time_error, tolerance)
+    return AlignmentResult(pose_index)

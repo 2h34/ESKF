@@ -9,17 +9,12 @@ GRAVITY_WORLD_MPS2 = np.array([0.0, 0.0, -GRAVITY_MPS2])
 # Numerical guards are not noise tuning. Bias-driving densities and initial
 # velocity uncertainty are engineering priors, not calibration results.
 # NumericalSafety
-QUATERNION_NORM_EPSILON = 1e-12
+GIMBAL_LOCK_EPSILON = 1e-12
 MINIMUM_VALID_QUATERNION_NORM = 1e-08
 MAXIMUM_QUATERNION_NORMALIZATION_ERROR = 0.001
 SMALL_ANGLE_EPSILON = 1e-08
 COVARIANCE_NEGATIVE_TOLERANCE = 1e-12
 COVARIANCE_SYMMETRY_TOLERANCE = 1e-12
-
-# Preprocess
-INVALID_SAMPLE_POLICY = 'drop'
-TIMESTAMP_SMALL_STEP_RATIO = 0.5
-TIMESTAMP_LARGE_STEP_RATIO = 1.8
 
 # StaticAnalysis
 CANDIDATE_DURATION_S = 2.0
@@ -39,3 +34,6 @@ ACCELEROMETER_BIAS_RANDOM_WALK_DENSITY = 0.001
 
 # Initialization
 INITIAL_VELOCITY_STD_MPS = 0.1
+
+# RunSummary: dt above this multiple of the median dt is reported as a large step.
+TIMESTAMP_LARGE_STEP_RATIO = 1.8

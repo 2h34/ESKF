@@ -126,7 +126,7 @@ def quaternion_to_rpy(quaternion_xyzw: ArrayLike) -> FloatArray:
     rotation = quaternion_to_rotation_matrix(quaternion_xyzw)
     pitch_argument = float(np.clip(-rotation[2, 0], -1.0, 1.0))
     pitch = np.arcsin(pitch_argument)
-    if abs(abs(pitch_argument) - 1.0) <= cfg.QUATERNION_NORM_EPSILON:
+    if abs(abs(pitch_argument) - 1.0) <= cfg.GIMBAL_LOCK_EPSILON:
         # At gimbal lock roll and yaw are not individually observable. Fix
         # roll=0 and return the equivalent, deterministic yaw representation.
         roll = 0.0

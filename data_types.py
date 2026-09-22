@@ -57,16 +57,7 @@ class InitStats:
     gyro_std: FloatArray
     acc_mean: FloatArray
     acc_std: FloatArray
-    acc_norm_mean: float
-    acc_norm_std: float
-    mean_dt: float
     median_dt: float
-    min_dt: float
-    max_dt: float
-    candidate_start_idx: int
-    candidate_end_idx: int
-    candidate_start_time: float
-    candidate_end_time: float
     is_static: bool
     decision_reasons: tuple[str, ...]
 
@@ -76,10 +67,6 @@ class AlignmentResult:
     """Pose association for every IMU sample.
 
     ``pose_index_for_imu[k] == -1`` means no observation met the tolerance.
-    For a valid match ``j``, ``time_error[k] = pose_time[j] - imu_time[k]``.
-    Unmatched time errors are NaN.
     """
 
     pose_index_for_imu: IntArray
-    time_error: FloatArray
-    tolerance_s: float

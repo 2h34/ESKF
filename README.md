@@ -1,78 +1,45 @@
-# IMU + FAST-LIO 15D ESKF 位姿估计
+# 基于 EKF 的 IMU 姿态解算（含位置估计选做）
 
-## 1. 项目与作业完成情况
+本题为[传感器组考核题目二](exam.pdf)。使用六轴 IMU 做 EKF 预测，使用 FAST-LIO 位姿与协方差做观测更新，输出姿态（Roll/Pitch/Yaw）与位置（x/y/z）数据及六条时间曲线。
 
-本项目完成[传感器组考核题目二](exam.pdf)的姿态估计必做内容，以及位置估计选做扩展。使用 IMU 进行 Prediction，使用 FAST-LIO 位置、四元数及协方差进行 Update，输出位置和 Roll/Pitch/Yaw 数据及六张时间曲线。
-
-当前 `15D-final` 是最终作业展示分支，保留可独立运行的 15D 程序、原始输入、预处理数据和正式实验结果。算法与参数沿用已验收版本。
-
-## 2. 文件结构与运行方式
-
-| 文件 / 目录 | 职责 |
-| --- | --- |
-| [config.py](config.py)、[data_types.py](data_types.py) | 分组参数常量、4 个具名数据结构 |
-| [rotation_utils.py](rotation_utils.py) | 四元数、旋转矩阵和 SO(3) 工具 |
-| [preprocess.py](preprocess.py) | CSV / NPZ 读写与校验、单位转换、静止统计、时间匹配 |
-| [eskf15d.py](eskf15d.py) | 初始化、ESKF15D 状态、Prediction、Pose Update、Injection、Reset |
-| [run_preprocess.py](scripts/run_preprocess.py) | 原始 CSV → processed 数据 |
-| [run_eskf15d.py](scripts/run_eskf15d.py) | 加载 → 初始化 → 预测/更新循环 → CSV 和摘要保存 |
-| [plot_eskf15d_results.py](scripts/plot_eskf15d_results.py) | 从正式结果 CSV 绘制六张曲线 |
-| `data/raw/` | [imu.csv](data/raw/imu.csv)、[pose_cov.csv](data/raw/pose_cov.csv) |
-| `data/processed/` | [IMU](data/processed/imu_processed.npz)、[pose](data/processed/pose_processed.npz)、[静止统计](data/processed/init_stats.npz)、[匹配表](data/processed/match_table.npz) |
-| `results/` | 正式结果、六张曲线和简洁诊断摘要 |
-
-在仓库根目录执行，需先准备 Python 和 uv。uv 按 [requirements.txt](requirements.txt) 准备依赖：
-
-```powershell
-# 已有 data/processed 四个 NPZ 时可跳过此步
-uv run --with-requirements requirements.txt python scripts/run_preprocess.py --raw-dir data/raw --output-dir data/processed
-
-uv run --with-requirements requirements.txt python scripts/run_eskf15d.py --processed-dir data/processed --output-dir results
-uv run --with-requirements requirements.txt python scripts/plot_eskf15d_results.py --result-csv results/eskf15d_result.csv --output-dir results/figures15d
-```
-
-也可先执行 `python -m pip install -r requirements.txt`，再使用相同命令中的 `python scripts/...` 部分。不能假定所有机器均已预装依赖。
-
-命令会写入指定目录；要保留当前正式结果，请使用其他 `--output-dir`。预处理生成四个兼容原格式的 NPZ 和简短 `diagnostic_report.json`，保留丢弃行、静止区间及时间匹配统计。滤波生成正式 CSV 与运行摘要，不再生成逐帧 debug CSV 或长文本报告。绘图接受至少两行的有效结果，不限制为随附数据的 25219 行。
-
-程序共 8 个 Python 文件；唯一有运行行为的类是 `ESKF15D`，另有 4 个仅描述数据字段的 dataclass。维护时按以下顺序阅读即可：
-
-1. 改阈值、噪声和初值先看 `config.py`，无需逐层查找配置对象。
-2. 看数据处理先读 `scripts/run_preprocess.py`，具体规则在 `preprocess.py`。
-3. 看运行时序先读 `scripts/run_eskf15d.py` 的 `run()`；初始化返回 `(eskf, k0)`，随后循环按顺序预测、条件更新并记录标量结果。
-4. 改公式看 `eskf15d.py` 的初始化函数、`predict()` 和 `update_pose()`；预测不返回调试对象，更新只返回两个残差范数和 NIS。
-
-读取文件时检查结构与时间轴，初始化时检查静止条件和初值，滤波时检查计算产生的数值问题。数据对象不再经过初始化上下文、状态快照、Debug 和运行结果等中转层。
-
-## 3. 状态、初始化与 Prediction
-
-名义状态包含 16 个存储标量，15D 指误差状态维数：
+状态设计采用题目给出的 15 维误差状态形式，因此同时覆盖必做的姿态估计与选做的位置估计：
 
 ```text
 x_hat   = (p_W, v_W, q_WB, bg, ba)
-delta_x = [delta_p, delta_v, delta_theta, delta_bg, delta_ba]
+delta_x = [delta_p, delta_v, delta_theta, delta_bg, delta_ba]     # 15 维
 ```
 
-四元数顺序为 xyzw，q_WB 表示 Body → World。位置、速度在 World frame，两个 bias 在 Body/IMU frame。姿态误差采用右乘局部扰动 `R_true = R_hat Exp(hat(delta_theta))`。
+必做部分对应 `delta_x` 中的姿态与陀螺零偏两块（6 维），其余 9 维为位置选做扩展。四元数顺序为 xyzw、`q_WB` 表示 Body → World；位置与速度在 World frame，两个零偏在 Body/IMU frame；姿态误差用旋转向量表示，采用右乘局部扰动 `R_true = R_hat Exp(hat(delta_theta))`。
 
-初始静止段为 [0,396)，初始化时刻 k0=395。位置、姿态来自该时刻匹配的 FAST-LIO 观测，v0=0，bg0=mean(gyro)，ba0=mean(acc)+R0.T@g_W。P0 包含初始姿态与加速度计零偏因重力补偿产生的交叉协方差，速度初始不确定性来自配置。
+## 1. 数据读取与预处理
 
-IMU 原始加速度单位为 g，预处理乘以 9.81 转为 m/s²，gyro 单位 rad/s。重力 g_W=[0,0,-9.81] m/s²。左端点 ZOH 名义传播使用旧状态：
+对应题目任务要求（1）：
+
+- **数据读取**：按列名读取 `data/raw/imu.csv` 与 `data/raw/pose_cov.csv`，丢弃非数值行。
+- **单位转换**：加速度由 g 乘以 9.81 转为 m/s²，角速度保持 rad/s。静止段实测 |acc| ≈ 0.994 g，与题目提示一致。
+- **时间戳处理**：校验严格递增；相邻两帧时间间隔 `dt` 由相邻 timestamp 差分得到（`dt[0] = NaN`）。
+- **陀螺零偏初值（必做）**：取初始静止段均值 `bg0 = mean(gyro)`。
+- **加计零偏初值（选做）**：静止时加计只感受重力，`ba0 = mean(acc) + R_WB(q0)^T @ g_W`。
+- **异常值处理**：静止判据校验（陀螺均值与标准差、加计模长与标准差）；观测协方差非正或四元数非单位时拒绝该观测。
+
+初始静止段为 `[0, 396)`，初始化时刻 `k0 = 395`，位置与姿态取该时刻对齐的 FAST-LIO 观测，`v0 = 0`。两份数据 timestamp 为同一时间基准，用 O(N+M) 最近邻匹配对齐，每个位姿最多使用一次。
+
+## 2. EKF 预测模型
+
+IMU 在相邻两帧间积分，采用左端点 ZOH（所有传播项使用旧状态）。`omega_hat = gyro - bg`，`f_B = acc - ba`，重力 `g_W = [0, 0, -9.81]` m/s²：
 
 ```text
-omega_hat = gyro - bg
-f_B       = acc - ba
-a_W       = R_WB(q_old) @ f_B + g_W
-p_new     = p_old + v_old * dt + 0.5 * a_W * dt^2
-v_new     = v_old + a_W * dt
-q_new     = normalize(q_old ⊗ Exp(omega_hat * dt))
-bg_new    = bg_old
-ba_new    = ba_old
+a_W   = R_WB(q_old) @ f_B + g_W
+p_new = p_old + v_old * dt + 0.5 * a_W * dt^2          # 选做
+v_new = v_old + a_W * dt                               # 选做
+q_new = normalize(q_old ⊗ Exp(omega_hat * dt))         # 必做
+bg_new = bg_old
+ba_new = ba_old
 ```
 
-这里 Exp 将旋转向量转为四元数。右乘来自 Body-frame gyro 与 R_WB 的定义。名义 bias 保持不变，随机游走通过过程噪声进入协方差。
+四元数更新后归一化；名义零偏保持不变，随机游走通过过程噪声进入协方差。
 
-连续误差模型令 R=R_WB(q_old)，每个块为 3×3：
+连续误差模型为误差状态 `delta_x` 的线性化模型，令 `R = R_WB(q_old)`，每个块为 3×3：
 
 ```text
 Fc = [0 I       0           0  0]
@@ -88,22 +55,20 @@ Gc = [ 0  0  0  0]
      [ 0  0  I  0]
      [ 0  0  0  I]
 
-Phi ≈ I15 + Fc * dt
-Qd  ≈ Gc @ Qc @ Gc.T * dt
+Phi = I15 + Fc * dt
+Qd  = Gc @ Qc @ Gc.T * dt
 P^- = Phi @ P @ Phi.T + Qd
 ```
 
-采用一阶离散，忽略高阶 dt²/dt³ 噪声耦合。当前 Qd 的位置对角块为零，不代表加速度噪声不会通过动力学影响位置。
+采用一阶离散，忽略高阶 dt²/dt³ 噪声耦合。
 
-主循环使用 gyro[k]、acc[k]、dt[k+1] 传播至 k+1，再按已有 pose_index_for_imu[k+1] 选择 Update。首步为 395 → 396，初始化观测不重复使用。dt 来自实际相邻 IMU timestamp，输出时间直接取 IMU timestamp，不累计重建时间、不重新匹配或插值。
+## 3. EKF 观测更新
 
-## 4. FAST-LIO 更新与 P / Q / R
-
-FAST-LIO 提供 position xyz、quaternion xyzw。观测四元数先归一化；若与预测四元数点积为负则取反，实现 q / -q sign alignment：
+对应题目任务要求（3）。观测为 `pose_cov.csv` 的位姿，观测四元数先归一化，若与预测四元数点积为负则取反，实现 q / -q sign alignment：
 
 ```text
-r_p     = p_obs - p_pred
-r_theta = Log(inverse(q_pred) ⊗ q_obs)
+r_p     = p_obs - p_pred                               # 选做
+r_theta = Log(inverse(q_pred) ⊗ q_obs)                 # 必做
 r       = [r_p, r_theta]
 H       = [I 0 0 0 0]
           [0 0 I 0 0]
@@ -113,17 +78,9 @@ K       = P^- @ H.T @ S^-1
 delta_x = K @ r
 ```
 
-S 的逆仅为数学表示，代码使用线性求解，不显式求逆。H 直接观察位置和姿态，速度与两个 bias 通过 P 的交叉项间接修正。
+观测噪声取自 `pose_cov.csv` 的协方差对角项：姿态取 `cov_33 / cov_44 / cov_55`，位置取 `cov_00 / cov_11 / cov_22`。S 的逆仅为数学表示，代码使用线性求解。H 直接观测位置与姿态，速度与两个零偏通过 P 的交叉项间接修正。姿态观测使 Roll、Pitch、Yaw 全部可观，其中 Yaw 是加速度计重力观测无法约束的。无匹配或观测方差非正时保留 Prediction，不做更新。
 
-| 矩阵 | 作用 |
-| --- | --- |
-| P，15×15 | 位置、速度、姿态及两个 bias 的误差状态协方差 |
-| Qc，12×12；Qd，15×15 | 加计噪声、gyro 噪声及两个 bias 随机游走的连续强度和离散过程噪声协方差 |
-| R_pose，6×6 | 来自 FAST-LIO CSV 方差对角项的位姿观测不确定性 |
-
-把 RPY 方差直接用于局部 rotation-vector residual 是小角度近似，不是严格的协方差坐标转换。无匹配或观测方差非正时保留 Prediction；covariance 含 NaN/Inf 时报错，不使用 floor 修复。
-
-Joseph covariance update、名义状态 Injection 和 Reset 为：
+Joseph 形式协方差更新、名义状态注入与 Reset：
 
 ```text
 A        = I15 - K @ H
@@ -134,17 +91,31 @@ q  <- normalize(q_pred ⊗ Exp(delta_theta))
 bg <- bg_pred + delta_bg
 ba <- ba_pred + delta_ba
 G_reset = I15
-G_reset[6:9,6:9] = I3 - 0.5 * hat(delta_theta)
+G_reset[6:9, 6:9] = I3 - 0.5 * hat(delta_theta)
 P <- G_reset @ P_joseph @ G_reset.T
 ```
 
-Reset 后误差均值归零，P 不清零。代码仅在非对称误差通过容差检查后做数值对称化；主循环检查 P 有限、对称及最小特征值，不做特征值裁剪。
+Reset 后误差均值归零，P 不清零。
 
-## 5. 实验结果与六张曲线
+## 4. P、Q、R 的作用
 
-[正式结果 CSV](results/eskf15d_result.csv) 每行对应一个 IMU 时刻的最终 posterior，包含 px_m/py_m/pz_m、roll_rad/pitch_rad/yaw_rad，以及速度、xyzw 四元数、两个 bias、timestamp、IMU index 和 Update 标志。
+| 矩阵 | 维数 | 作用 |
+| --- | --- | --- |
+| P | 15×15 | 位置、速度、姿态及两个零偏的误差状态协方差；决定增益分配与各状态的可观程度 |
+| Qc / Qd | 12×12 / 15×15 | Qc 为加计噪声、陀螺噪声及两个零偏随机游走的连续强度；Qd 为对应离散过程噪声协方差，决定预测阶段不确定性的增长 |
+| R_pose | 6×6 | 来自 FAST-LIO 方差对角项的观测不确定性，决定观测被信任的程度 |
 
-以下来自[保存的运行摘要](results/eskf15d_summary.json)（phase=3.5 是 Runner 实现阶段标识）：
+陀螺与加计的噪声密度由静止段标准差换算，两个零偏随机游走密度与初始速度不确定性取配置中的工程先验。P0 包含初始姿态与加计零偏因重力补偿产生的交叉协方差，以及由静止段样本数决定的零偏初值不确定性。
+
+## 5. 输出与实验结果
+
+### 5.1 输出
+
+对应题目任务要求（4）与输出要求。欧拉角由最终四元数按 ZYX 顺序转换得到。
+
+[正式结果 CSV](results/eskf15d_result.csv) 每行对应一个 IMU 时刻的最终 posterior，含 px_m/py_m/pz_m、roll_rad/pitch_rad/yaw_rad，以及速度、xyzw 四元数、两个零偏、timestamp、IMU index 与 Update 标志。
+
+以下来自[运行摘要](results/eskf15d_summary.json)：
 
 | 项目 | 结果 |
 | --- | ---: |
@@ -157,7 +128,9 @@ Reset 后误差均值归零，P 不清零。代码仅在非对称误差通过容
 | 最小 P eigenvalue | 2.187804287285118e-09 |
 | 正式结果全部有限 | true |
 
-横轴为 timestamp-timestamp[0]，单位 s；位置单位 m，姿态单位 rad。曲线直接使用正式 CSV，未平滑或重采样，Yaw 保留原始主值、不 unwrap。
+### 5.2 六条曲线
+
+横轴为 `timestamp - timestamp[0]`，单位 s；位置单位 m，姿态单位 rad。曲线直接使用正式 CSV，未平滑或重采样，Yaw 保留原始主值、不 unwrap。
 
 ![Position X](results/figures15d/x_time.png)
 
@@ -173,18 +146,33 @@ Reset 后误差均值归零，P 不清零。代码仅在非对称误差通过容
 
 ## 6. 误差分析与局限
 
-[离线诊断摘要](results/analysis15d/error_diagnosis_summary.json)显示：position residual norm 均值为 0.002531094 m，attitude residual norm 均值为 0.000777045 rad；NIS mean / median / p95 为 23.834862 / 5.531808 / 113.084843。
+[离线诊断摘要](results/analysis15d/error_diagnosis_summary.json)：position residual norm 均值为 0.002531094 m，attitude residual norm 均值为 0.000777045 rad；NIS mean / median / p95 为 23.834862 / 5.531808 / 113.084843。经验 p95 以上高 NIS 帧集中于 60–110 s 动态时段，位置与姿态 residual 同时增大。Yaw 在 IMU 16608、17009、17504 处跨越 ±π，但相邻四元数实际旋转仅约 0.189735°、0.101484°、0.082441°，属于欧拉角表示边界。
 
-经验 p95 以上高 NIS 帧集中于 60–110 s 动态时段，位置、姿态 residual 同时增大。Yaw 在 IMU 16608、17009、17504 处跨越 ±π；相邻四元数实际旋转仅约 0.189735°、0.101484°、0.082441°，属于欧拉角表示边界。
+FAST-LIO 是参与 Update 的观测来源，本身也使用 IMU，不是独立 ground truth。Prediction-to-observation residual 不等于真实定位误差；本实验验证了完整流程与数值稳定性，但没有独立验证真实位置/姿态精度，也没有证明 Q/R/P0 已正确标定。一阶离散、姿态协方差的小角度近似与观测相关性都可能影响统计一致性；现有日志不足以确定唯一根因。本项目未进行自动调参或按 NIS 剔除观测。
 
-FAST-LIO 是参与 Update 的观测来源，本身也使用 IMU，不是独立 ground truth。Prediction-to-observation residual 不等于 posterior 与观测的差异，更不等于真实定位误差。当前实验验证了完整流程和数值稳定性，没有独立验证真实位置/姿态精度，也没有证明 Q/R/P0 已正确标定。
+## 附录：代码结构与运行方式
 
-一阶离散、姿态 covariance 近似和观测相关性可能影响统计一致性。现有证据不能确定唯一根因；日志缺少完整 S，不能精确分解位置与姿态的 NIS 贡献。本项目未进行自动调参或按 NIS 剔除观测。
+| 文件 / 目录 | 职责 |
+| --- | --- |
+| [config.py](config.py)、[data_types.py](data_types.py) | 参数常量、4 个具名数据结构 |
+| [rotation_utils.py](rotation_utils.py) | 四元数、旋转矩阵与 SO(3) 工具 |
+| [preprocess.py](preprocess.py) | CSV / NPZ 读写与校验、单位转换、静止统计、时间匹配 |
+| [eskf15d.py](eskf15d.py) | 初始化、ESKF15D 状态、Prediction、Pose Update、Injection、Reset |
+| [run_preprocess.py](scripts/run_preprocess.py) | 原始 CSV → processed 数据 |
+| [run_eskf15d.py](scripts/run_eskf15d.py) | 加载 → 初始化 → 预测/更新循环 → CSV 和摘要保存 |
+| [plot_eskf15d_results.py](scripts/plot_eskf15d_results.py) | 从正式结果 CSV 绘制六张曲线 |
+| `data/raw/` | [imu.csv](data/raw/imu.csv)、[pose_cov.csv](data/raw/pose_cov.csv) |
+| `data/processed/` | [IMU](data/processed/imu_processed.npz)、[pose](data/processed/pose_processed.npz)、[静止统计](data/processed/init_stats.npz)、[匹配表](data/processed/match_table.npz) |
+| `results/` | 正式结果、六张曲线与诊断摘要 |
 
-## 7. 完整开发版本
+在仓库根目录执行，需先准备 Python 与 uv。uv 按 [requirements.txt](requirements.txt) 准备依赖：
 
-[完整 15D 开发分支](https://github.com/2h34/ESKF/tree/15D)保留独立 6D 实现、单元测试、逐帧 Debug、离线误差诊断和完整学习开发过程。该分支 README 包含原有 6D 版本与验证内容。
+```powershell
+# 已有 data/processed 四个 NPZ 时可跳过此步
+uv run --with-requirements requirements.txt python scripts/run_preprocess.py --raw-dir data/raw --output-dir data/processed
 
-当前 `15D-final` 用于最终作业展示，已移除 6D 遗留初始化和开发诊断包装。保留具名数据结构、独立旋转函数与直接对应公式的滤波实现；内部接口不兼容旧开发版，但三个命令行入口、四个 NPZ、正式结果 CSV 和运行摘要保持兼容。学习笔记记录历史学习过程，旧模块名不代表当前文件结构。
+uv run --with-requirements requirements.txt python scripts/run_eskf15d.py --processed-dir data/processed --output-dir results
+uv run --with-requirements requirements.txt python scripts/plot_eskf15d_results.py --result-csv results/eskf15d_result.csv --output-dir results/figures15d
+```
 
-重构验证应在临时目录执行完整预处理、滤波和绘图：逐字段比较四个 NPZ，逐行比较正式 CSV，比较全部摘要指标，并检查六张图片可以解码。仅通过导入或 `--help` 不构成结果验证。
+也可先执行 `python -m pip install -r requirements.txt`，再使用相同命令中的 `python scripts/...` 部分。
