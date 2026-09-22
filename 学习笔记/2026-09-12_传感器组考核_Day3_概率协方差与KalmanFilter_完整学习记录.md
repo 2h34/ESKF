@@ -135,7 +135,7 @@ $$
 
 $$
 \boxed{
-真实状态可能位于哪些值，以及这些值分别有多可能
+\text{真实状态可能位于哪些值，以及这些值分别有多可能}
 }
 $$
 
@@ -153,7 +153,7 @@ $$
 \boxed{
 Mean
 =
-\text{Probability Distribution}\ 的中心位置
+\text{Probability Distribution}\ \text{的中心位置}
 }
 $$
 
@@ -219,7 +219,7 @@ $$
 
 $$
 \boxed{
-两个变量相对各自 Mean 的偏差是否具有一起变化的趋势
+\text{两个变量相对各自} Mean \text{的偏差是否具有一起变化的趋势}
 }
 $$
 
@@ -242,12 +242,12 @@ $$
 $$
 \begin{aligned}
 &\boxed{\text{Diagonal Terms}=
-每个 State 自己的 Variance
+\text{每个} State \text{自己的} Variance
 }\\
 &\boxed{
 Off\text{-}\text{Diagonal Terms}
 =
-不同 State Error 之间的 Covariance
+\text{不同} State Error \text{之间的} Covariance
 }
 \end{aligned}
 $$
@@ -292,7 +292,7 @@ $$
 
 $$
 \boxed{
-我们对 Error 的统计不确定性
+\text{我们对} Error \text{的统计不确定性}
 }
 $$
 
@@ -308,7 +308,7 @@ $$
 \boxed{
 P\text{ 大}
 \neq
-当前实际 Error 一定大
+\text{当前实际} Error \text{一定大}
 }
 $$
 
@@ -326,7 +326,7 @@ $$
 \boxed{
 P
 =
-当前 State Estimate 的 uncertainty
+\text{当前} State Estimate \text{的} uncertainty
 }
 $$
 
@@ -362,7 +362,7 @@ $$
 \boxed{
 Q
 =
-这一次 Prediction 过程中新增的 uncertainty
+\text{这一次} Prediction \text{过程中新增的} uncertainty
 }
 $$
 
@@ -398,7 +398,7 @@ $$
 \boxed{
 R
 =
-这一次 Observation 自身的 uncertainty
+\text{这一次} Observation \text{自身的} uncertainty
 }
 $$
 
@@ -460,7 +460,7 @@ $F$ 描述：
 
 $$
 \boxed{
-上一时刻 State 怎样传播到下一时刻 State
+\text{上一时刻} State \text{怎样传播到下一时刻} State
 }
 $$
 
@@ -490,7 +490,7 @@ $H$ 的核心作用是：
 
 $$
 \boxed{
-把完整 State 映射到 Sensor 能观测的空间
+\text{把完整} State \text{映射到} Sensor \text{能观测的空间}
 }
 $$
 
@@ -521,11 +521,11 @@ $$
 \begin{aligned}
 &\boxed{
 F:
-State\ 怎样随时间传播
+State\ \text{怎样随时间传播}
 }\\
 &\boxed{
 H:
-Sensor\ 能从 State 中看到什么
+Sensor\ \text{能从} State \text{中看到什么}
 }
 \end{aligned}
 $$
@@ -626,7 +626,7 @@ $$
 \boxed{
 FPF^T
 =
-旧 uncertainty 根据 State propagation 关系进行传播
+\text{旧} uncertainty \text{根据} State propagation \text{关系进行传播}
 }
 $$
 
@@ -634,7 +634,7 @@ $$
 
 $$
 \boxed{
-本次 Prediction 新加入的 Process uncertainty
+\text{本次} Prediction \text{新加入的} Process uncertainty
 }
 $$
 
@@ -644,9 +644,9 @@ $$
 \boxed{
 P_k^-
 =
-旧 uncertainty 的传播
+\text{旧} uncertainty \text{的传播}
 +
-新的 Process uncertainty
+\text{新的} Process uncertainty
 }
 $$
 
@@ -686,7 +686,7 @@ $$
 
 $$
 \boxed{
-Residual / Innovation 自身的不确定性
+Residual / Innovation \text{自身的不确定性}
 }
 $$
 
@@ -736,7 +736,7 @@ $$
 
 $$
 \boxed{
-更相信 Measurement
+\text{更相信} Measurement
 }
 $$
 
@@ -744,7 +744,7 @@ $$
 
 $$
 \boxed{
-更相信 Prediction
+\text{更相信} Prediction
 }
 $$
 
@@ -752,7 +752,7 @@ $$
 
 $$
 \boxed{\text{Kalman Gain}=
-根据 Prediction uncertainty 和 Measurement uncertainty 自动计算的动态融合权重
+\text{根据} Prediction uncertainty \text{和} Measurement uncertainty \text{自动计算的动态融合权重}
 }
 $$
 
@@ -782,7 +782,7 @@ $$
 
 $$
 \boxed{
-从 Prediction 出发，沿着 Observation 指出的方向修正一部分
+\text{从} Prediction \text{出发，沿着} Observation \text{指出的方向修正一部分}
 }
 $$
 
@@ -885,7 +885,7 @@ Residual：$r=0.2$，和第一组相同。这说明：
 
 $$
 \boxed{
-Residual 只描述 Prediction 与 Measurement 差多少
+Residual \text{只描述} Prediction \text{与} Measurement \text{差多少}
 }
 $$
 
@@ -893,7 +893,7 @@ $$
 
 $$
 \boxed{
-这个差应该用于修正多少，由 K 决定
+\text{这个差应该用于修正多少，由} K \text{决定}
 }
 $$
 
@@ -923,7 +923,7 @@ $$
 
 $$
 \boxed{\text{Matrix KF}\neq
-另一套算法
+\text{另一套算法}
 }
 $$
 
@@ -931,7 +931,7 @@ $$
 
 $$
 \boxed{
-一维 Kalman Filter 在多维相互关联 State 上的推广
+\text{一维} Kalman Filter \text{在多维相互关联} State \text{上的推广}
 }
 $$
 
@@ -1017,8 +1017,8 @@ $$
 所有公式背后的真正核心是：
 
 $$
-\boxed{\text{Kalman Filter}不是只维护 State Estimate，
-还同时维护 State Estimate 的 Uncertainty
+\boxed{\text{Kalman Filter}\text{不是只维护} State Estimate\text{，}
+\text{还同时维护} State Estimate \text{的} Uncertainty
 }
 $$
 
@@ -1046,9 +1046,9 @@ Prediction 做两件事：
 
 $$
 \boxed{
-传播 State
+\text{传播} State
 +
-传播 / 增加 Uncertainty
+\text{传播} / \text{增加} Uncertainty
 }
 $$
 
@@ -1076,7 +1076,7 @@ Day 3 学习过程中有四处需要修正的理解。
 
 $$
 \boxed{
-Error 的统计 uncertainty
+Error \text{的统计} uncertainty
 }
 $$
 
@@ -1114,9 +1114,9 @@ P ≠ Q ≠ R：
 $$
 \begin{aligned}
 &P:
-当前 State Estimate uncertainty\\
+\text{当前} State Estimate uncertainty\\
 &Q:
-Prediction 新增 process uncertainty\\
+Prediction \text{新增} process uncertainty\\
 &R:
 Observation uncertainty
 \end{aligned}
@@ -1144,7 +1144,7 @@ Day 1 解决“三维姿态怎样表示”，学习 Rotation Matrix、Rotation V
 
 $$
 \boxed{
-三维姿态怎样表示
+\text{三维姿态怎样表示}
 }
 $$
 
@@ -1152,7 +1152,7 @@ Day 2 解决“IMU 怎样预测姿态”，学习 SO(3)、so(3)、Exp / Log、Gy
 
 $$
 \boxed{
-IMU 怎样预测姿态
+IMU \text{怎样预测姿态}
 }
 $$
 
@@ -1160,7 +1160,7 @@ Day 3 解决“Prediction 和 Observation 怎样根据 uncertainty 进行融合�
 
 $$
 \boxed{
-Prediction 和 Observation 怎样根据 uncertainty 进行融合
+Prediction \text{和} Observation \text{怎样根据} uncertainty \text{进行融合}
 }
 $$
 
@@ -1204,11 +1204,11 @@ $$
 
 $$
 \boxed{
-Day\ 1：姿态怎么表示
+Day\ 1\text{：姿态怎么表示}
 \rightarrow
-Day\ 2：IMU 怎么预测姿态
+Day\ 2\text{：}IMU \text{怎么预测姿态}
 \rightarrow
-Day\ 3：Prediction 和 Observation 怎么依据 Uncertainty 融合
+Day\ 3\text{：}Prediction \text{和} Observation \text{怎么依据} Uncertainty \text{融合}
 }
 $$
 
@@ -1216,6 +1216,6 @@ Day 4 才会进一步解决：
 
 $$
 \boxed{
-如何把 Kalman Filter 的思想真正落到非线性的 Quaternion 姿态估计上
+\text{如何把} Kalman Filter \text{的思想真正落到非线性的} Quaternion \text{姿态估计上}
 }
 $$
