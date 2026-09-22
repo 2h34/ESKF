@@ -25,7 +25,7 @@ $\displaystyle \boxed{ Prediction + Observation + Uncertainty \rightarrow\mathrm
 
 Gyroscope（陀螺仪）直接输出 **Angular Velocity（角速度）**：
 
-$\displaystyle \omega_m= \begin{bmatrix} \omega_x\\ \omega_y\\ \omega_z \end{bmatrix}$
+$\displaystyle \omega_m= [\omega_x,\ \omega_y,\ \omega_z]^T$
 
 单位是 $rad/s$。它**不是直接输出姿态**；姿态需要通过 $\mathrm{Angular\ Velocity}\rightarrow Integration \rightarrow Attitude$ 得到。
 
@@ -125,7 +125,7 @@ $\displaystyle x\sim \mathcal N(\mu,\Sigma)$
 
 ## 3.5 Covariance：两变量误差是否一起变化
 
-设 $x=\begin{bmatrix} p\\ v \end{bmatrix}$。不仅要知道 position 自身、velocity 自身多不确定，还要知道 position error 和 velocity error 是否存在统计关联。Covariance 定义：
+设 $x=[p,\ v]^T$。不仅要知道 position 自身、velocity 自身多不确定，还要知道 position error 和 velocity error 是否存在统计关联。Covariance 定义：
 
 $\displaystyle Cov(X,Y) = E[(X-\mu_X)(Y-\mu_Y)]$
 
@@ -137,17 +137,17 @@ $\displaystyle \boxed{ \text{两个变量相对各自} Mean \text{的偏差是�
 
 ## 3.6 Covariance Matrix：协方差矩阵
 
-对于 $x=\begin{bmatrix} p\\ v \end{bmatrix}$，可写：
+对于 $x=[p,\ v]^T$，可写：
 
-$\displaystyle P= \begin{bmatrix} \sigma_p^2 & Cov(p,v)\\ Cov(v,p) & \sigma_v^2 \end{bmatrix}$
+$\displaystyle P= [\sigma_p^2,\ Cov(p,v);\ Cov(v,p),\ \sigma_v^2]$
 
 核心结构是：
 
-$\displaystyle \begin{aligned} &\boxed{\mathrm{Diagonal\ Terms}= \text{每个} State \text{自己的} Variance }\\ &\boxed{ Off\text{-}\mathrm{Diagonal\ Terms} = \text{不同} State Error \text{之间的} Covariance } \end{aligned}$
+$\displaystyle \boxed{\mathrm{Diagonal\ Terms}= \text{每个} State \text{自己的} Variance } \qquad \boxed{ Off\text{-}\mathrm{Diagonal\ Terms} = \text{不同} State Error \text{之间的} Covariance }$
 
 例如
 
-$\displaystyle P= \begin{bmatrix} 4&1.5\\ 1.5&9 \end{bmatrix}$
+$\displaystyle P= [4,\ 1.5;\ 1.5,\ 9]$
 
 的含义是 $4=Var(p)$、$9=Var(v)$、$1.5=Cov(p,v)=Cov(v,p)$。Covariance Matrix 满足：
 
@@ -233,7 +233,7 @@ $\displaystyle \boxed{ R = \text{这一次} Observation \text{自身的} uncerta
 
 ## 4.4 P / Q / R 的最终区分
 
-$\displaystyle \begin{aligned} &\boxed{ P=\text{我现在有多不确定} }\\ &\boxed{ Q=\text{我预测这一步又增加多少不确定性} }\\ &\boxed{ R=\text{外部观测本身有多不确定} } \end{aligned}$
+$\displaystyle \boxed{ P=\text{我现在有多不确定} } \qquad \boxed{ Q=\text{我预测这一步又增加多少不确定性} } \qquad \boxed{ R=\text{外部观测本身有多不确定} }$
 
 ---
 
@@ -257,9 +257,9 @@ $F$ 描述：
 
 $\displaystyle \boxed{ \text{上一时刻} State \text{怎样传播到下一时刻} State }$
 
-以 $x=\begin{bmatrix} p\\ v \end{bmatrix}$ 的恒速模型为例，$p_k=p_{k-1}+v_{k-1}\Delta t$ 且 $v_k=v_{k-1}$，对应：
+以 $x=[p,\ v]^T$ 的恒速模型为例，$p_k=p_{k-1}+v_{k-1}\Delta t$ 且 $v_k=v_{k-1}$，对应：
 
-$\displaystyle \boxed{ F= \begin{bmatrix} 1&\Delta t\\ 0&1 \end{bmatrix} }$
+$\displaystyle \boxed{ F= [1,\ \Delta t;\ 0,\ 1] }$
 
 逐项理解：$F_{11}=1$ 表示旧 position 保留到新 position；$F_{12}=\Delta t$ 表示 velocity 通过积分影响下一时刻 position（右上角 $\Delta t$ 存在，正是因为表达了 velocity 对下一时刻 position 的积分作用）；$F_{21}=0$ 表示恒速模型中 position 不影响下一时刻 velocity；$F_{22}=1$ 表示 velocity 保持不变。所以：
 
@@ -271,9 +271,9 @@ $H$ 的核心作用是：
 
 $\displaystyle \boxed{ \text{把完整} State \text{映射到} Sensor \text{能观测的空间} }$
 
-若 $x=\begin{bmatrix} position\\ velocity \end{bmatrix}$ 而 Sensor 只测 Position，则 $H=\begin{bmatrix} 1&0 \end{bmatrix}$；若 Sensor 只测 Velocity，则 $H=\begin{bmatrix} 0&1 \end{bmatrix}$。
+若 $x=[position,\ velocity]^T$ 而 Sensor 只测 Position，则 $H=[1,\ 0]$；若 Sensor 只测 Velocity，则 $H=[0,\ 1]$。
 
-这里出现过一次理解问题：一开始把“只测 velocity”的 H 写成了 $2\times2$ 的 $\begin{bmatrix} 0&0\\ 0&1 \end{bmatrix}$。后续明确：如果 $x\in\mathbb R^n$ 而 $z\in\mathbb R^m$，那么：
+这里出现过一次理解问题：一开始把“只测 velocity”的 H 写成了 $2\times2$ 的 $[0,\ 0;\ 0,\ 1]$。后续明确：如果 $x\in\mathbb R^n$ 而 $z\in\mathbb R^m$，那么：
 
 $\displaystyle \boxed{ H\in\mathbb R^{m\times n} }$
 
@@ -281,13 +281,13 @@ $\displaystyle \boxed{ H\in\mathbb R^{m\times n} }$
 
 $\displaystyle \boxed{ H:\mathrm{State\ Space}\rightarrow\mathrm{Measurement\ Space}}$
 
-如果 State 是 2D 但 Measurement 只有 1D，则 $H\in\mathbb R^{1\times2}$，正确写法是 $H=\begin{bmatrix} 0&1 \end{bmatrix}$。
+如果 State 是 2D 但 Measurement 只有 1D，则 $H\in\mathbb R^{1\times2}$，正确写法是 $H=[0,\ 1]$。
 
 ## 5.4 F 与 H 的区别
 
 这是后面 EKF 必须清楚的边界：$F$ 管“State 怎样随时间传播”，$H$ 管“Sensor 能从 State 中看到什么”。
 
-$\displaystyle \begin{aligned} &\boxed{ F: State\ \text{怎样随时间传播} }\\ &\boxed{ H: Sensor\ \text{能从} State \text{中看到什么} } \end{aligned}$
+$\displaystyle \boxed{ F: State\ \text{怎样随时间传播} } \qquad \boxed{ H: Sensor\ \text{能从} State \text{中看到什么} }$
 
 即 $x_{k-1} \xrightarrow{F} x_k$，而 $x_k \xrightarrow{H}\mathrm{Predicted\ Measurement}$。
 
@@ -311,9 +311,9 @@ $\displaystyle P_{k-1}^+ \rightarrow P_k^- \rightarrow P_k^+$
 
 $\displaystyle \boxed{ \hat x_k^- = F_k\hat x_{k-1}^+ + B_ku_k }$
 
-它表示使用 Motion Model，把上一帧 corrected state 推到当前时刻。例如 $\hat x_{k-1}^+=\begin{bmatrix} 10\\ 2 \end{bmatrix}$、$\Delta t=0.5s$、$F=\begin{bmatrix} 1&0.5\\ 0&1 \end{bmatrix}$，得到：
+它表示使用 Motion Model，把上一帧 corrected state 推到当前时刻。例如 $\hat x_{k-1}^+=[10,\ 2]^T$、$\Delta t=0.5s$、$F=[1,\ 0.5;\ 0,\ 1]$，得到：
 
-$\displaystyle \hat x_k^-= \begin{bmatrix} 11\\ 2 \end{bmatrix}$
+$\displaystyle \hat x_k^-= [11,\ 2]^T$
 
 也就是 $p_k^-=11m$、$v_k^-=2m/s$。
 
@@ -530,7 +530,7 @@ $\displaystyle \boxed{ Observation }$
 
 因此：
 
-$\displaystyle \begin{aligned} &\boxed{ IMU \rightarrow Prediction }\\ &\boxed{ FAST\text{-}LIO \rightarrow Observation } \end{aligned}$
+$\displaystyle \boxed{ IMU \rightarrow Prediction } \qquad \boxed{ FAST\text{-}LIO \rightarrow Observation }$
 
 题目规定 position covariance 为 `cov_00`、`cov_11`、`cov_22`，attitude covariance 为 `cov_33`、`cov_44`、`cov_55`。所以姿态 Observation Noise Covariance 可概念上写成：
 
@@ -580,7 +580,7 @@ Day 3 学习过程中有四处需要修正的理解。
 
 1. **Quaternion 归一化和 State Accuracy 混淆**：最初的说法是“已经算出 Quaternion 后还需要归一化，所以不能认为绝对准确”，这混了两个层级。归一化解决的是 $\|q\|=1$，即 Quaternion 表示是否合法；Probability / Covariance 解决的是“这个合法 Quaternion 到底有多可信”。最终明确 $Normalization \neq\mathrm{Uncertainty\ Estimation}$。
 
-2. **Observation Matrix H 的维度**：最初在“State 为 [position, velocity]，Sensor 只测 velocity”时写成了 $2\times2$ 矩阵。后来明确 $H\in\mathbb R^{m\times n}$，其中 $n$ 是 State Dimension，$m$ 是 Measurement Dimension。这里只有一个 measurement，所以 $H=\begin{bmatrix} 0&1 \end{bmatrix}$。
+2. **Observation Matrix H 的维度**：最初在“State 为 [position, velocity]，Sensor 只测 velocity”时写成了 $2\times2$ 矩阵。后来明确 $H\in\mathbb R^{m\times n}$，其中 $n$ 是 State Dimension，$m$ 是 Measurement Dimension。这里只有一个 measurement，所以 $H=[0,\ 1]$。
 
 3. **P 的物理含义容易和 Error 混淆**：最终明确 $P$ 不是当前实际 Error，它描述：
 
@@ -602,17 +602,17 @@ Error 与 Covariance 不同：$e=x-\hat x$ 是实际 Estimation Error，而 $P=E
 
 Variance 与 Standard Deviation 不同：
 
-$\displaystyle \begin{aligned} &Variance=\sigma^2\\ &\mathrm{Standard\ Deviation}=\sigma \end{aligned}$
+$\displaystyle Variance=\sigma^2 \qquad \mathrm{Standard\ Deviation}=\sigma$
 
 Covariance 与 Correlation Coefficient 不同：Covariance 能反映两个变量误差之间的联合变化关系，但不能直接和标准化后的 Correlation Coefficient（相关系数）等同。
 
 P ≠ Q ≠ R：
 
-$\displaystyle \begin{aligned} &P: \text{当前} State Estimate uncertainty\\ &Q: Prediction \text{新增} process uncertainty\\ &R: Observation uncertainty \end{aligned}$
+$\displaystyle P: \text{当前} State Estimate uncertainty \qquad Q: Prediction \text{新增} process uncertainty \qquad R: Observation uncertainty$
 
 F ≠ H：
 
-$\displaystyle \begin{aligned} &F:\mathrm{State\ propagation}\\ &H: State\rightarrow Measurement \end{aligned}$
+$\displaystyle F:\mathrm{State\ propagation} \qquad H: State\rightarrow Measurement$
 
 Residual ≠ True Error：$r=z-H\hat x^-$ 只是 Observation 与 Prediction 的差。因为 Observation 也有 Noise，所以它不是实际 State Error。
 
