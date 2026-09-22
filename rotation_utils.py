@@ -1,8 +1,8 @@
-"""Rotation helpers using xyzw Hamilton quaternions.
+"""使用 xyzw Hamilton 四元数的旋转工具。
 
-Quaternions represent active body-to-world rotations ``R_WB``. Multiplication
-returns ``q1 tensor-product q2``. This convention is compatible with the current
-right-multiplicative error definition ``R_true = R_hat Exp(delta_theta^)``.
+四元数表示主动的机体到世界旋转 ``R_WB``。四元数乘法返回
+``q1 ⊗ q2``。该约定与当前采用的右乘误差定义
+``R_true = R_hat Exp(delta_theta^)`` 兼容。
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ def _vector(value: ArrayLike, size: int, name: str) -> FloatArray:
 
 
 def hat(vector: ArrayLike) -> FloatArray:
-    """Return the 3x3 skew matrix satisfying ``hat(a) @ b == cross(a, b)``."""
+    """返回满足 ``hat(a) @ b == cross(a, b)`` 的 3x3 反对称矩阵。"""
 
     x, y, z = _vector(vector, 3, "vector")
     return np.array([[0.0, -z, y], [z, 0.0, -x], [-y, x, 0.0]], dtype=float)
@@ -35,7 +35,7 @@ def hat(vector: ArrayLike) -> FloatArray:
 def normalize_quaternion(
     quaternion_xyzw: ArrayLike,
 ) -> FloatArray:
-    """Normalize one finite quaternion with storage order ``[x, y, z, w]``."""
+    """归一化一个有限四元数，存储顺序为 ``[x, y, z, w]``。"""
 
     q = _vector(quaternion_xyzw, 4, "quaternion_xyzw")
     norm = float(np.linalg.norm(q))
@@ -46,7 +46,7 @@ def normalize_quaternion(
 
 
 def quaternion_multiply(q1_xyzw: ArrayLike, q2_xyzw: ArrayLike) -> FloatArray:
-    """Return Hamilton product ``q1 tensor-product q2`` in xyzw order."""
+    """返回 xyzw 顺序下的 Hamilton 积 ``q1 ⊗ q2``。"""
 
     q1 = _vector(q1_xyzw, 4, "q1_xyzw")
     q2 = _vector(q2_xyzw, 4, "q2_xyzw")
@@ -60,7 +60,7 @@ def quaternion_multiply(q1_xyzw: ArrayLike, q2_xyzw: ArrayLike) -> FloatArray:
 def quaternion_inverse(
     quaternion_xyzw: ArrayLike,
 ) -> FloatArray:
-    """Return the multiplicative inverse of a finite xyzw quaternion."""
+    """返回一个有限 xyzw 四元数的乘法逆。"""
 
     q = _vector(quaternion_xyzw, 4, "quaternion_xyzw")
     norm_sq = float(np.dot(q, q))
@@ -73,7 +73,7 @@ def quaternion_inverse(
 def rotvec_to_quaternion(
     rotation_vector_rad: ArrayLike,
 ) -> FloatArray:
-    """Convert a rotation vector in radians, shape ``(3,)``, to xyzw."""
+    """把弧度制旋转向量（形状 ``(3,)``）转换为 xyzw 四元数。"""
 
     phi = _vector(rotation_vector_rad, 3, "rotation_vector_rad")
     theta = float(np.linalg.norm(phi))
@@ -92,7 +92,7 @@ def rotvec_to_quaternion(
 def quaternion_to_rotvec(
     quaternion_xyzw: ArrayLike,
 ) -> FloatArray:
-    """Convert an xyzw quaternion to the shortest rotation vector in radians."""
+    """把 xyzw 四元数转换为弧度制的最短旋转向量。"""
 
     q = normalize_quaternion(quaternion_xyzw)
     if q[3] < 0.0:
@@ -107,7 +107,7 @@ def quaternion_to_rotvec(
 
 
 def quaternion_to_rotation_matrix(quaternion_xyzw: ArrayLike) -> FloatArray:
-    """Return active ``R_WB`` (shape ``(3, 3)``) from an xyzw quaternion."""
+    """由 xyzw 四元数返回主动旋转 ``R_WB``（形状 ``(3, 3)``）。"""
 
     x, y, z, w = normalize_quaternion(quaternion_xyzw)
     return np.array(
@@ -121,14 +121,14 @@ def quaternion_to_rotation_matrix(quaternion_xyzw: ArrayLike) -> FloatArray:
 
 
 def quaternion_to_rpy(quaternion_xyzw: ArrayLike) -> FloatArray:
-    """Return ``[roll, pitch, yaw]`` in radians using ZYX yaw-pitch-roll."""
+    """按 ZYX（yaw-pitch-roll）顺序返回弧度制 ``[roll, pitch, yaw]``。"""
 
     rotation = quaternion_to_rotation_matrix(quaternion_xyzw)
     pitch_argument = float(np.clip(-rotation[2, 0], -1.0, 1.0))
     pitch = np.arcsin(pitch_argument)
     if abs(abs(pitch_argument) - 1.0) <= cfg.GIMBAL_LOCK_EPSILON:
-        # At gimbal lock roll and yaw are not individually observable. Fix
-        # roll=0 and return the equivalent, deterministic yaw representation.
+        # 万向锁时 roll 与 yaw 无法各自分辨。固定 roll=0，返回等价且
+        # 确定的 yaw 表示。
         roll = 0.0
         yaw = np.arctan2(-rotation[0, 1], rotation[1, 1])
     else:

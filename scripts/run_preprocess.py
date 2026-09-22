@@ -1,4 +1,4 @@
-"""Prepare SI measurements, static statistics, and one-to-one timestamp matches."""
+"""准备 SI 制测量值、静止统计量与一对一的时间戳匹配表。"""
 
 from __future__ import annotations
 

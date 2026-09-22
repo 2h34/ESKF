@@ -1,14 +1,14 @@
-"""Fixed conventions, input thresholds, and tuning for the offline 15D ESKF."""
+"""离线 15D ESKF 的固定约定、输入阈值与调参常量。"""
 
 import numpy as np
 
-# xyzw Hamilton quaternions; R_WB maps Body to World; right-multiplicative error.
+# 四元数采用 xyzw 顺序的 Hamilton 约定；R_WB 把机体系映射到世界系；误差采用右乘。
 GRAVITY_MPS2 = 9.81
 GRAVITY_WORLD_MPS2 = np.array([0.0, 0.0, -GRAVITY_MPS2])
 
-# Numerical guards are not noise tuning. Bias-driving densities and initial
-# velocity uncertainty are engineering priors, not calibration results.
-# NumericalSafety
+# 数值保护阈值不属于噪声调参。零偏驱动密度与初始速度不确定性是工程先验，
+# 不是标定结果。
+# 数值安全（NumericalSafety）
 GIMBAL_LOCK_EPSILON = 1e-12
 MINIMUM_VALID_QUATERNION_NORM = 1e-08
 MAXIMUM_QUATERNION_NORMALIZATION_ERROR = 0.001
@@ -16,7 +16,7 @@ SMALL_ANGLE_EPSILON = 1e-08
 COVARIANCE_NEGATIVE_TOLERANCE = 1e-12
 COVARIANCE_SYMMETRY_TOLERANCE = 1e-12
 
-# StaticAnalysis
+# 静止分析（StaticAnalysis）
 CANDIDATE_DURATION_S = 2.0
 MAX_GYRO_MEAN_NORM_RAD_S = 0.05
 MAX_GYRO_STD_COMPONENT_RAD_S = 0.02
@@ -24,16 +24,16 @@ MAX_ACC_NORM_ERROR_MPS2 = 0.5
 MAX_ACC_STD_COMPONENT_MPS2 = 0.2
 MAX_ACC_NORM_STD_MPS2 = 0.2
 
-# Alignment
+# 时间对齐（Alignment）
 TOLERANCE_RATIO = 0.5
 ABSOLUTE_TOLERANCE_S = None
 
-# FilterNoise
+# 滤波噪声（FilterNoise）
 GYRO_BIAS_RANDOM_WALK_DENSITY = 0.0001
 ACCELEROMETER_BIAS_RANDOM_WALK_DENSITY = 0.001
 
-# Initialization
+# 初始化（Initialization）
 INITIAL_VELOCITY_STD_MPS = 0.1
 
-# RunSummary: dt above this multiple of the median dt is reported as a large step.
+# 运行摘要（RunSummary）：dt 超过中位 dt 的该倍数时记为一个大步长。
 TIMESTAMP_LARGE_STEP_RATIO = 1.8

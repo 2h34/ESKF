@@ -1,4 +1,4 @@
-"""Replay IMU and matched FAST-LIO poses; save posterior states and a run summary."""
+"""回放 IMU 与匹配到的 FAST-LIO 位姿，保存后验状态与运行摘要。"""
 
 from __future__ import annotations
 
@@ -97,7 +97,7 @@ def run(processed_directory: Path, output_directory: Path) -> dict:
         j = int(alignment.pose_index_for_imu[k])
         update_applied = False
         pose_matches += int(j >= 0)
-        # The initial row is already a posterior; do not reuse its observation.
+        # 初始化那一行本身已经是后验，不重复使用它的观测。
         if k > k0:
             eskf.predict(imu.gyro_rad_s[k - 1], imu.acc_mps2[k - 1], float(imu.dt[k]))
             if j < 0:
@@ -113,7 +113,7 @@ def run(processed_directory: Path, output_directory: Path) -> dict:
                 update_applied = True
                 successful_updates += 1
 
-        # Check the posterior, retaining full-record numerical health metrics.
+        # 检查后验，同时保留全程数值健康指标。
         if not np.all(np.isfinite(eskf.P)):
             raise RuntimeError(f"P is non-finite at IMU index {k}")
         symmetry = float(np.max(np.abs(eskf.P - eskf.P.T)))
@@ -122,7 +122,7 @@ def run(processed_directory: Path, output_directory: Path) -> dict:
             raise RuntimeError(f"P is asymmetric or indefinite at IMU index {k}")
         max_P_symmetry_error = max(max_P_symmetry_error, symmetry)
         minimum_P_eigenvalue = min(minimum_P_eigenvalue, minimum)
-        # Convert to scalar values now, so later updates cannot change saved rows.
+        # 现在就转成标量，避免之后的更新改动已保存的行。
         values = np.concatenate((eskf.p, eskf.v, eskf.q, quaternion_to_rpy(eskf.q), eskf.bg, eskf.ba))
         rows.append([float(imu.timestamp[k]), k, *values.tolist(), j >= 0, update_applied])
 
@@ -136,7 +136,7 @@ def run(processed_directory: Path, output_directory: Path) -> dict:
     propagation_dt = imu.dt[k0 + 1:]
     large_dt_threshold = cfg.TIMESTAMP_LARGE_STEP_RATIO * float(np.median(imu.dt[1:]))
     summary = {
-        "phase": "3.5",  # Retained for compatibility with saved summaries.
+        "phase": "3.5",  # 为兼容已保存的摘要而保留。
         "start_index": k0, "end_index": int(imu.timestamp.size - 1),
         "start_timestamp": float(timestamps[0]), "end_timestamp": float(timestamps[-1]),
         "duration": float(timestamps[-1] - timestamps[0]),

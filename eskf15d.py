@@ -1,4 +1,4 @@
-"""15D ESKF: right error [dp, dv, dtheta, dbg, dba], xyzw Body-to-World attitude."""
+"""15 维 ESKF：右乘误差 [dp, dv, dtheta, dbg, dba]，xyzw 表示的 Body 到 World 姿态。"""
 
 from __future__ import annotations
 
@@ -21,13 +21,12 @@ def _finite_vector(value: ArrayLike, size: int, name: str) -> FloatArray:
 
 
 def _covariance_matrix(value: ArrayLike, size: int, name: str) -> FloatArray:
-    """Validate shape/finiteness and return the numerical average ``0.5(M + M^T)``.
+    """校验形状与有限性，并返回数值平均 ``0.5(M + M^T)``。
 
-    Symmetrization is part of the computation, not a defensive check: without it
-    the covariance loses exact symmetry under repeated rank-6 updates. The former
-    per-call symmetry test and negative-diagonal scan were dropped because the
-    algebra in ``predict``/``update_pose`` preserves both properties by
-    construction, and the runner re-checks them once per frame.
+    对称化是计算本身的一部分，而非防御性检查：若不做对称化，协方差在反复的
+    秩 6 更新下会失去精确对称性。原先的逐次调用对称性检验与负对角元扫描已被
+    移除，因为 ``predict``/``update_pose`` 中的代数运算按构造即保持这两个性质，
+    且 runner 每帧会重新检查一次。
     """
 
     matrix = np.asarray(value, dtype=float)
@@ -37,7 +36,7 @@ def _covariance_matrix(value: ArrayLike, size: int, name: str) -> FloatArray:
 
 
 class ESKF15D:
-    """Own p/v in World, q_WB, biases in Body, P (15x15), and fixed Qc (12x12)."""
+    """持有 World 系下的 p/v、q_WB、Body 系下的零偏、P (15x15) 以及固定的 Qc (12x12)。"""
 
     def __init__(self, *, p, v, q, bg, ba, P, Qc):
         self.p = _finite_vector(p, 3, "initial position")
@@ -49,7 +48,7 @@ class ESKF15D:
         self.Qc = _covariance_matrix(Qc, 12, "Qc")
 
     def predict(self, gyro: ArrayLike, acc: ArrayLike, dt: float) -> None:
-        """Left-endpoint ZOH: every propagation term uses the old state."""
+        """左端点零阶保持（ZOH）：每个传播项都使用旧状态。"""
         gyro = _finite_vector(gyro, 3, "gyro")
         acc = _finite_vector(acc, 3, "acc")
         dt = float(dt)
@@ -72,7 +71,7 @@ class ESKF15D:
         Fc[6:9, 6:9] = -hat(omega)
         Fc[6:9, 9:12] = -I3
 
-        # Continuous noise order: accelerometer, gyro, gyro bias, accel bias.
+        # 连续噪声顺序：加速度计、陀螺仪、陀螺零偏、加速度计零偏。
         Gc = np.zeros((15, 12))
         Gc[3:6, 0:3] = -R
         Gc[6:9, 3:6] = -I3
@@ -82,13 +81,13 @@ class ESKF15D:
         Qd = Gc @ self.Qc @ Gc.T * dt
         P = _covariance_matrix(Phi @ self.P @ Phi.T + Qd, 15, "predicted P")
 
-        # Commit only after all checks succeed. Nominal biases stay constant.
+        # 全部检查通过后才提交。名义零偏保持不变。
         self.p, self.v, self.q, self.P = p, v, q, P
 
     def update_pose(
         self, position: ArrayLike, quaternion: ArrayLike, covariance: ArrayLike,
     ) -> tuple[float, float, float]:
-        """Pose update, injection, reset; return position/angle residual norms and NIS."""
+        """位姿更新、注入、Reset；返回位置/角度残差范数与 NIS。"""
         position = _finite_vector(position, 3, "observed position")
         q_obs = normalize_quaternion(quaternion)
         if np.dot(self.q, q_obs) < 0.0:
@@ -114,7 +113,7 @@ class ESKF15D:
             raise ValueError("Kalman gain contains a non-finite value")
         dx = _finite_vector(K @ residual, 15, "delta_x")
 
-        # Joseph covariance update, then right-multiplicative state injection.
+        # Joseph 形式协方差更新，随后进行右乘状态注入。
         I15 = np.eye(15)
         A = I15 - K @ H
         P_joseph = _covariance_matrix(A @ self.P @ A.T + K @ R @ K.T, 15, "Joseph P")
@@ -124,7 +123,7 @@ class ESKF15D:
         bg = _finite_vector(self.bg + dx[9:12], 3, "injected bg")
         ba = _finite_vector(self.ba + dx[12:15], 3, "injected ba")
 
-        # Reset changes error coordinates, not the physical nominal state.
+        # Reset 改变的是误差坐标，而非物理名义状态。
         G_reset = I15.copy()
         G_reset[6:9, 6:9] = np.eye(3) - 0.5 * hat(dx[6:9])
         P = _covariance_matrix(G_reset @ P_joseph @ G_reset.T, 15, "reset P")
@@ -139,11 +138,11 @@ def initialize_eskf15d(
     imu: ProcessedIMUData, pose: ProcessedPoseData,
     stats: InitStats, alignment: AlignmentResult,
 ) -> tuple[ESKF15D, int]:
-    """Initialize at the final static sample; inputs have passed the NPZ loaders."""
+    """在最后一个静止采样处初始化；输入均已通过 NPZ 加载器的检查。"""
     start, stop = stats.static_start_idx, stats.static_end_idx
     if not stats.is_static or not (0 <= start < stop <= imu.timestamp.size):
         raise ValueError("initialization requires an accepted non-empty static interval")
-    k0 = stop - 1  # Static interval uses Python's exclusive stop index.
+    k0 = stop - 1  # 静止区间使用 Python 的排他性 stop 索引。
     if k0 >= imu.timestamp.size - 1:
         raise ValueError("an IMU sample is required after initialization")
     if not np.isclose(stats.static_end_time, imu.timestamp[k0], rtol=0.0, atol=1e-9):
@@ -170,13 +169,13 @@ def initialize_eskf15d(
     P0[3:6, 3:6] = cfg.INITIAL_VELOCITY_STD_MPS**2 * np.eye(3)
     P0[6:9, 6:9] = Ptheta
     P0[9:12, 9:12] = np.diag(gyro_std**2 / count)
-    # Initial attitude uncertainty also affects the gravity-compensated ba.
+    # 初始姿态不确定性也会影响重力补偿后的 ba。
     Jg = hat(gravity_body)
     P0[6:9, 12:15] = Ptheta @ Jg.T
     P0[12:15, 6:9] = Jg @ Ptheta
     P0[12:15, 12:15] = np.diag(acc_std**2 / count) + Jg @ Ptheta @ Jg.T
 
-    # Keep the established full-record median dt, not a static-only dt estimate.
+    # 沿用既有的全记录中位 dt，而非仅用静止区间的 dt 估计。
     gyro_density = gyro_std * np.sqrt(stats.median_dt)
     acc_density = acc_std * np.sqrt(stats.median_dt)
     Qc = np.diag(np.concatenate((

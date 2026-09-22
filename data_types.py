@@ -1,4 +1,4 @@
-"""Named array groups shared by preprocessing and the filter."""
+"""预处理与滤波器共用的具名数组分组。"""
 
 from __future__ import annotations
 
@@ -14,12 +14,11 @@ IntArray = NDArray[np.int64]
 
 @dataclass(frozen=True)
 class ProcessedIMUData:
-    """Validated IMU measurements in SI units.
+    """经过校验的 IMU 测量，使用 SI 单位。
 
-    ``timestamp`` and ``dt`` have shape ``(N,)`` in seconds. ``dt[0]`` is NaN
-    because no preceding measurement exists. ``gyro_rad_s`` and ``acc_mps2``
-    have shape ``(N, 3)`` and remain raw measurements (no bias or gravity
-    compensation is applied).
+    ``timestamp`` 与 ``dt`` 形状为 ``(N,)``，单位秒。``dt[0]`` 为 NaN，
+    因为第一个样本没有前一样本。``gyro_rad_s`` 与 ``acc_mps2`` 形状为
+    ``(N, 3)``，且保持原始测量值（不做任何零偏补偿或重力补偿）。
     """
 
     timestamp: FloatArray
@@ -30,13 +29,12 @@ class ProcessedIMUData:
 
 @dataclass(frozen=True)
 class ProcessedPoseData:
-    """Validated FAST-LIO poses.
+    """经过校验的 FAST-LIO 位姿。
 
-    ``quaternion_xyzw`` has shape ``(M, 4)``. Runtime code interprets it as
-    ``R_WB`` under the documented project convention; standard FAST-LIO source
-    semantics and the gravity sanity check support that interpretation, while
-    the unavailable CSV export chain remains an explicit assumption. The
-    covariance diagonal has order ``[x, y, z, roll, pitch, yaw]``.
+    ``quaternion_xyzw`` 形状为 ``(M, 4)``。运行期代码按项目文档约定的
+    ``R_WB`` 解释它；标准 FAST-LIO 源码语义与重力合理性检查都支持这一解释，
+    而无法获取的 CSV 导出链路仍是一个明确的假设。协方差对角项的顺序为
+    ``[x, y, z, roll, pitch, yaw]``。
     """
 
     timestamp: FloatArray
@@ -47,7 +45,7 @@ class ProcessedPoseData:
 
 @dataclass(frozen=True)
 class InitStats:
-    """Statistics for the accepted initial static interval."""
+    """被接受的初始静止区间的统计量。"""
 
     static_start_idx: int
     static_end_idx: int
@@ -64,9 +62,9 @@ class InitStats:
 
 @dataclass(frozen=True)
 class AlignmentResult:
-    """Pose association for every IMU sample.
+    """每个 IMU 样本对应的位姿关联结果。
 
-    ``pose_index_for_imu[k] == -1`` means no observation met the tolerance.
+    ``pose_index_for_imu[k] == -1`` 表示没有观测落在容差范围内。
     """
 
     pose_index_for_imu: IntArray

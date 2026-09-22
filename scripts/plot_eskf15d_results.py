@@ -1,4 +1,4 @@
-"""Plot position and ZYX roll/pitch/yaw from the 15D result CSV."""
+"""从 15D 结果 CSV 绘制位置与 ZYX 顺序的 roll/pitch/yaw 曲线。"""
 
 from __future__ import annotations
 
@@ -100,7 +100,7 @@ def generate_plots(result_csv: Path, output_directory: Path) -> dict[str, object
         path = output_directory / filename
         _save_plot(time_s, values[field], ylabel, title, path)
         output_paths[field] = str(path.resolve())
-    # Preserve raw yaw values, including the +/-pi representation boundary.
+    # 保留 yaw 的原始值，包括 ±π 处的表示边界。
     return {
         "row_count": int(timestamp.size), "start_time_s": float(time_s[0]),
         "end_time_s": float(time_s[-1]), "figure_paths": output_paths,

@@ -1,4 +1,4 @@
-"""Raw/processed data I/O, SI conversion, static analysis, and time association."""
+"""原始/处理后数据的 I/O、SI 单位换算、静止分析（static analysis）与时间关联（time association）。"""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def _read_numeric_csv(
     path: str | Path,
     expected_columns: Sequence[str],
 ) -> tuple[FloatArray, tuple[int, ...], int]:
-    """Read named numeric columns and drop rows that are not fully numeric."""
+    """按列名读取数值列，并丢弃非完全数值的行。"""
 
     csv_path = Path(path)
     valid_rows: list[list[float]] = []
@@ -89,7 +89,7 @@ def _validate_timestamps(timestamp: FloatArray, label: str) -> FloatArray:
 def load_imu_csv(
     path: str | Path,
 ) -> tuple[ProcessedIMUData, dict]:
-    """Load IMU CSV by column name and convert accelerometer g to m/s^2."""
+    """按列名加载 IMU CSV，并将加速度计的 g 换算为 m/s^2。"""
 
     values, invalid_rows, raw_count = _read_numeric_csv(path, IMU_COLUMNS)
     timestamp = values[:, 0]
@@ -118,7 +118,7 @@ def load_imu_csv(
 def load_pose_csv(
     path: str | Path,
 ) -> tuple[ProcessedPoseData, dict]:
-    """Load FAST-LIO pose/covariance CSV, validate, and normalize xyzw quaternions."""
+    """加载 FAST-LIO 位姿/协方差 CSV，校验并归一化 xyzw 四元数。"""
 
     values, invalid_rows, raw_count = _read_numeric_csv(path, POSE_COLUMNS)
     timestamp = values[:, 0]
@@ -161,7 +161,7 @@ def load_pose_csv(
 def analyze_initial_static_segment(
     imu: ProcessedIMUData,
 ) -> InitStats:
-    """Validate and summarize the configured initial candidate static interval."""
+    """校验并汇总配置的初始候选静止区间。"""
 
     if cfg.CANDIDATE_DURATION_S <= 0.0:
         raise ValueError("candidate static duration must be positive")
@@ -240,7 +240,7 @@ def align_timestamps(
     imu_timestamp: FloatArray,
     pose_timestamp: FloatArray,
 ) -> AlignmentResult:
-    """Match nearest timestamps in O(N+M), with unique monotonic pose use."""
+    """在 O(N+M) 时间内匹配最近的时间戳，并保证位姿被唯一且单调地使用。"""
 
     imu_time = np.asarray(imu_timestamp, dtype=float)
     pose_time = np.asarray(pose_timestamp, dtype=float)
@@ -279,7 +279,7 @@ def save_processed_data(
     directory: Path, imu: ProcessedIMUData, pose: ProcessedPoseData,
     stats: InitStats, alignment: AlignmentResult,
 ) -> None:
-    """Save the four stable NPZ schemas; dataclass fields are their named keys."""
+    """保存四个稳定的 NPZ 模式（schema）；dataclass 字段即其命名键。"""
     directory.mkdir(parents=True, exist_ok=True)
     for filename, data in (
         ("imu_processed.npz", imu), ("pose_processed.npz", pose),
@@ -345,7 +345,7 @@ def _scalar_bool(arrays: Mapping[str, np.ndarray], key: str) -> bool:
 
 
 def load_processed_imu(path: str | Path) -> ProcessedIMUData:
-    """Load and validate ``imu_processed.npz`` as ``ProcessedIMUData``."""
+    """加载并校验 ``imu_processed.npz``，构造为 ``ProcessedIMUData``。"""
 
     arrays = _read_npz(path, {"timestamp", "dt", "gyro_rad_s", "acc_mps2"})
     timestamp_raw = np.asarray(arrays["timestamp"])
@@ -368,7 +368,7 @@ def load_processed_imu(path: str | Path) -> ProcessedIMUData:
 
 
 def load_processed_pose(path: str | Path) -> ProcessedPoseData:
-    """Load and validate ``pose_processed.npz`` as ``ProcessedPoseData``."""
+    """加载并校验 ``pose_processed.npz``，构造为 ``ProcessedPoseData``。"""
 
     arrays = _read_npz(
         path, {"timestamp", "position", "quaternion_xyzw", "cov_diag"}
@@ -417,7 +417,7 @@ def load_init_stats(
     *,
     imu_sample_count: int | None = None,
 ) -> InitStats:
-    """Load and validate ``init_stats.npz`` as ``InitStats``."""
+    """加载并校验 ``init_stats.npz``，构造为 ``InitStats``。"""
 
     arrays = _read_npz(path, _INIT_KEYS)
     static_start = _scalar_int(arrays, "static_start_idx")
@@ -468,7 +468,7 @@ def load_alignment(
     imu_sample_count: int,
     pose_sample_count: int,
 ) -> AlignmentResult:
-    """Load and validate ``match_table.npz`` as ``AlignmentResult``."""
+    """加载并校验 ``match_table.npz``，构造为 ``AlignmentResult``。"""
 
     arrays = _read_npz(path, {"pose_index_for_imu"})
     index_raw = np.asarray(arrays["pose_index_for_imu"])
