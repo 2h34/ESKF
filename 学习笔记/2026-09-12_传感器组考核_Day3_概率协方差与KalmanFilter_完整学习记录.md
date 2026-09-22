@@ -13,7 +13,7 @@ Day 2 已经解决从角速度到四元数的预测链：
 
 $$ \omega_m \rightarrow \hat{\omega} \rightarrow \Delta\theta \rightarrow \Delta q \rightarrow q_{k+1} $$
 
-即 $\boxed{IMU \rightarrow\text{Quaternion Prediction}}$。Day 3 不再重新学习姿态表示，也不提前推 Quaternion Error-State，而是补上“Prediction 和 Observation 各自有多可信、如何据此融合”这一环：
+即 $IMU \rightarrow\text{Quaternion Prediction}$。Day 3 不再重新学习姿态表示，也不提前推 Quaternion Error-State，而是补上“Prediction 和 Observation 各自有多可信、如何据此融合”这一环：
 
 $$ \boxed{ Prediction + Observation + Uncertainty \rightarrow\text{Kalman Fusion}} $$
 
@@ -443,14 +443,14 @@ $$ \boxed{ P^+ = (I-KH)P^-(I-KH)^T + KRK^T } $$
 
 | 步骤 | 公式 |
 |---|---|
-| Step 1 State Prediction | $\boxed{\hat x_k^- = F\hat x_{k-1}^+ + Bu}$ |
-| Step 2 Covariance Prediction | $\boxed{P_k^- = FP_{k-1}^+F^T+Q}$ |
+| Step 1 State Prediction | $\hat x_k^- = F\hat x_{k-1}^+ + Bu$ |
+| Step 2 Covariance Prediction | $P_k^- = FP_{k-1}^+F^T+Q$ |
 | Step 3 Measurement | $z_k$ |
-| Step 4 Residual / Innovation | $\boxed{r_k = z_k-H\hat x_k^-}$ |
-| Step 5 Innovation Covariance | $\boxed{S_k = HP_k^-H^T+R}$ |
-| Step 6 Kalman Gain | $\boxed{K_k = P_k^-H^TS_k^{-1}}$ |
-| Step 7 State Correction | $\boxed{\hat x_k^+ = \hat x_k^-+K_kr_k}$ |
-| Step 8 Covariance Correction | $\boxed{P_k^+ = (I-K_kH)P_k^-}$ |
+| Step 4 Residual / Innovation | $r_k = z_k-H\hat x_k^-$ |
+| Step 5 Innovation Covariance | $S_k = HP_k^-H^T+R$ |
+| Step 6 Kalman Gain | $K_k = P_k^-H^TS_k^{-1}$ |
+| Step 7 State Correction | $\hat x_k^+ = \hat x_k^-+K_kr_k$ |
+| Step 8 Covariance Correction | $P_k^+ = (I-K_kH)P_k^-$ |
 
 然后 $\hat x_k^+,P_k^+$ 进入下一帧。
 
@@ -578,7 +578,7 @@ Kalman Filter 再根据 $P^-$ 和 $R$ 判断 Prediction 与 Measurement 各应�
 
 Day 3 学习过程中有四处需要修正的理解。
 
-1. **Quaternion 归一化和 State Accuracy 混淆**：最初的说法是“已经算出 Quaternion 后还需要归一化，所以不能认为绝对准确”，这混了两个层级。归一化解决的是 $\|q\|=1$，即 Quaternion 表示是否合法；Probability / Covariance 解决的是“这个合法 Quaternion 到底有多可信”。最终明确 $\boxed{Normalization \neq\text{Uncertainty Estimation}}$。
+1. **Quaternion 归一化和 State Accuracy 混淆**：最初的说法是“已经算出 Quaternion 后还需要归一化，所以不能认为绝对准确”，这混了两个层级。归一化解决的是 $\|q\|=1$，即 Quaternion 表示是否合法；Probability / Covariance 解决的是“这个合法 Quaternion 到底有多可信”。最终明确 $Normalization \neq\text{Uncertainty Estimation}$。
 
 2. **Observation Matrix H 的维度**：最初在“State 为 [position, velocity]，Sensor 只测 velocity”时写成了 $2\times2$ 矩阵。后来明确 $H\in\mathbb R^{m\times n}$，其中 $n$ 是 State Dimension，$m$ 是 Measurement Dimension。这里只有一个 measurement，所以 $H=\begin{bmatrix} 0&1 \end{bmatrix}$。
 
