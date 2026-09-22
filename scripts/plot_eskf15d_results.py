@@ -1,174 +1,54 @@
-"""Plot the six required Phase 3.7 curves from frozen 15D ESKF results."""
-
-from __future__ import annotations
+"""Plot the required position and attitude curves from the result CSV."""
 
 import argparse
 import csv
-import json
+import sys
 from pathlib import Path
 
 import matplotlib
-
 matplotlib.use("Agg")
-
-import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import numpy as np
 
+ROOT = Path(__file__).resolve().parents[1]
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_ROW_COUNT = 25219
-FIGURE_DPI = 200
-LINE_COLOR = "#1F4E79"
-GRID_COLOR = "#D1D5DB"
-
-PLOT_SPECS = (
-    ("px_m", "Position X (m)", "15D ESKF Position X - Time", "x_time.png"),
-    ("py_m", "Position Y (m)", "15D ESKF Position Y - Time", "y_time.png"),
-    ("pz_m", "Position Z (m)", "15D ESKF Position Z - Time", "z_time.png"),
-    ("roll_rad", "Roll (rad)", "15D ESKF Roll - Time", "roll_time.png"),
-    ("pitch_rad", "Pitch (rad)", "15D ESKF Pitch - Time", "pitch_time.png"),
-    ("yaw_rad", "Yaw (rad)", "15D ESKF Yaw - Time", "yaw_time.png"),
+PLOTS = (
+    ("px_m", "Position X (m)", "x_time.png"), ("py_m", "Position Y (m)", "y_time.png"),
+    ("pz_m", "Position Z (m)", "z_time.png"), ("roll_rad", "Roll (rad)", "roll_time.png"),
+    ("pitch_rad", "Pitch (rad)", "pitch_time.png"), ("yaw_rad", "Yaw (rad)", "yaw_time.png"),
 )
 
 
-def _load_result(path: Path) -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarray]]:
-    try:
-        with path.open("r", encoding="utf-8", newline="") as stream:
-            rows = list(csv.DictReader(stream))
-    except OSError as exc:
-        raise ValueError(f"failed to read {path}: {exc}") from exc
-
-    if len(rows) != EXPECTED_ROW_COUNT:
-        raise ValueError(
-            f"expected {EXPECTED_ROW_COUNT} result rows, found {len(rows)}"
-        )
-
-    required = {"timestamp", "imu_index", *(spec[0] for spec in PLOT_SPECS)}
-    missing = required.difference(rows[0] if rows else ())
-    if missing:
-        raise ValueError(f"result CSV is missing columns: {sorted(missing)}")
-
-    try:
-        timestamp = np.asarray(
-            [float(row["timestamp"]) for row in rows], dtype=float
-        )
-        imu_index = np.asarray(
-            [int(row["imu_index"]) for row in rows], dtype=np.int64
-        )
-        values = {
-            field: np.asarray([float(row[field]) for row in rows], dtype=float)
-            for field, _, _, _ in PLOT_SPECS
-        }
-    except (TypeError, ValueError) as exc:
-        raise ValueError("result CSV contains an invalid plotting value") from exc
-
-    if not np.all(np.isfinite(timestamp)):
-        raise ValueError("timestamp must contain only finite values")
-    if np.any(np.diff(timestamp) <= 0.0):
-        raise ValueError("timestamp must be strictly increasing")
-    for field, array in values.items():
-        if not np.all(np.isfinite(array)):
-            raise ValueError(f"{field} must contain only finite values")
-    return timestamp, imu_index, values
-
-
-def _save_plot(
-    time_s: np.ndarray,
-    values: np.ndarray,
-    ylabel: str,
-    title: str,
-    path: Path,
-) -> None:
-    figure, axis = plt.subplots(figsize=(10.0, 4.5))
-    axis.plot(time_s, values, color=LINE_COLOR, linewidth=1.1)
-    axis.set_title(title, fontsize=13, pad=10)
-    axis.set_xlabel("Time (s)")
-    axis.set_ylabel(ylabel)
-    axis.set_xlim(float(time_s[0]), float(time_s[-1]))
-    axis.grid(True, color=GRID_COLOR, linewidth=0.7, alpha=0.75)
-    axis.spines["top"].set_visible(False)
-    axis.spines["right"].set_visible(False)
-    figure.tight_layout()
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    figure.savefig(path, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
-    plt.close(figure)
-
-    if not path.is_file() or path.stat().st_size == 0:
-        raise RuntimeError(f"figure was not saved correctly: {path}")
-    image = mpimg.imread(path)
-    if image.ndim not in (2, 3) or image.size == 0 or not np.all(np.isfinite(image)):
-        raise RuntimeError(f"saved figure cannot be read correctly: {path}")
-
-
-def generate_plots(result_csv: Path, output_directory: Path) -> dict[str, object]:
-    timestamp, imu_index, values = _load_result(result_csv)
-    time_s = timestamp - timestamp[0]
-    if time_s[0] != 0.0:
-        raise RuntimeError("the first relative timestamp must be exactly zero")
-
-    output_paths: dict[str, str] = {}
-    ranges: dict[str, dict[str, float]] = {}
-    maximum_steps: dict[str, dict[str, float | int]] = {}
-    for field, ylabel, title, filename in PLOT_SPECS:
+def generate_plots(result_csv: Path, output_directory: Path) -> dict:
+    with result_csv.open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    if len(rows) < 2:
+        raise ValueError("result CSV needs at least two rows")
+    time = np.asarray([float(row["timestamp"]) for row in rows])
+    if np.any(np.diff(time) <= 0.0):
+        raise ValueError("result timestamps must increase")
+    output_directory.mkdir(parents=True, exist_ok=True)
+    paths = {}
+    for field, ylabel, filename in PLOTS:
+        values = np.asarray([float(row[field]) for row in rows])
+        figure, axis = plt.subplots(figsize=(10, 4.5))
+        axis.plot(time - time[0], values, linewidth=1.1)
+        axis.set(xlabel="Time (s)", ylabel=ylabel, title=f"15D ESKF {ylabel} - Time")
+        axis.grid(True)
+        figure.tight_layout()
         path = output_directory / filename
-        _save_plot(time_s, values[field], ylabel, title, path)
-        output_paths[field] = str(path.resolve())
-        ranges[field] = {
-            "min": float(np.min(values[field])),
-            "max": float(np.max(values[field])),
-        }
-        differences = np.abs(np.diff(values[field]))
-        step_position = int(np.argmax(differences)) + 1
-        maximum_steps[field] = {
-            "absolute_step": float(differences[step_position - 1]),
-            "time_s": float(time_s[step_position]),
-            "imu_index": int(imu_index[step_position]),
-        }
-
-    # This detects only the Euler-angle representation boundary. The formal yaw
-    # plot deliberately retains the raw CSV values and does not use np.unwrap().
-    yaw = values["yaw_rad"]
-    yaw_boundary_positions = np.flatnonzero(np.abs(np.diff(yaw)) > np.pi) + 1
-    yaw_boundary_events = [
-        {
-            "time_s": float(time_s[position]),
-            "imu_index": int(imu_index[position]),
-            "yaw_before_rad": float(yaw[position - 1]),
-            "yaw_after_rad": float(yaw[position]),
-        }
-        for position in yaw_boundary_positions
-    ]
-
-    return {
-        "row_count": int(timestamp.size),
-        "start_time_s": float(time_s[0]),
-        "end_time_s": float(time_s[-1]),
-        "timestamps_strictly_increasing": True,
-        "all_plot_components_finite": True,
-        "ranges": ranges,
-        "maximum_adjacent_steps": maximum_steps,
-        "yaw_boundary_events": yaw_boundary_events,
-        "figure_paths": output_paths,
-    }
+        figure.savefig(path, dpi=200)
+        plt.close(figure)
+        paths[field] = str(path.resolve())
+    return {"row_count": len(rows), "figure_paths": paths}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--result-csv",
-        type=Path,
-        default=PROJECT_ROOT / "results" / "eskf15d_result.csv",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=PROJECT_ROOT / "results" / "figures15d",
-    )
-    arguments = parser.parse_args()
-    summary = generate_plots(arguments.result_csv, arguments.output_dir)
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    parser.add_argument("--result-csv", type=Path, default=ROOT / "results" / "eskf15d_result.csv")
+    parser.add_argument("--output-dir", type=Path, default=ROOT / "results" / "figures15d")
+    args = parser.parse_args()
+    print(generate_plots(args.result_csv, args.output_dir))
 
 
 if __name__ == "__main__":
